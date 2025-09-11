@@ -1,0 +1,281 @@
+from django.shortcuts import render
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+import json
+from datetime import datetime
+from .models import Client
+from mongoengine.errors import DoesNotExist, ValidationError
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def client_list(request):
+    """
+    List all clients or create a new client
+    GET: Returns list of all clients
+    POST: Creates a new client
+    """
+    if request.method == 'GET':
+        try:
+            clients = Client.objects.all()
+            data = []
+            for client in clients:
+                data.append({
+                    'id': str(client.id),
+                    'client_id': client.client_id,
+                    'client_name': client.client_name,
+                    'company_name': client.company_name,
+                    'email': client.email,
+                    'phone': client.phone,
+                    'address': client.address,
+                    'contact_person': client.contact_person,
+                    'is_active': client.is_active,
+                    'created_at': client.created_at.isoformat(),
+                    'updated_at': client.updated_at.isoformat()
+                })
+            return JsonResponse({
+                'status': 'success',
+                'data': data,
+                'total': len(data)
+            })
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': str(e)
+            }, status=500)
+    
+    elif request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            
+            # Validate required fields
+            required_fields = ['client_id', 'client_name', 'email', 'phone', 'address', 'contact_person']
+            for field in required_fields:
+                if field not in data or not data[field]:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f'Required field "{field}" is missing or empty'
+                    }, status=400)
+            
+            client = Client(
+                client_id=data['client_id'],
+                client_name=data['client_name'],
+                company_name=data.get('company_name', ''),
+                email=data['email'],
+                phone=data['phone'],
+                address=data['address'],
+                contact_person=data['contact_person'],
+                is_active=data.get('is_active', True)
+            )
+            client.save()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Client created successfully',
+                'data': {
+                    'id': str(client.id),
+                    'client_id': client.client_id,
+                    'client_name': client.client_name,
+                    'email': client.email
+                }
+            }, status=201)
+            
+        except ValidationError as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Validation error: {str(e)}'
+            }, status=400)
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid JSON format'
+            }, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': str(e)
+            }, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "PUT", "DELETE"])
+def client_detail(request, client_id):
+    """
+    Get, update, or delete a specific client by client_id
+    GET: Returns client details
+    PUT: Updates client information
+    DELETE: Deletes the client
+    """
+    try:
+        client = Client.objects.get(client_id=client_id)
+        
+        if request.method == 'GET':
+            return JsonResponse({
+                'status': 'success',
+                'data': {
+                    'id': str(client.id),
+                    'client_id': client.client_id,
+                    'client_name': client.client_name,
+                    'company_name': client.company_name,
+                    'email': client.email,
+                    'phone': client.phone,
+                    'address': client.address,
+                    'contact_person': client.contact_person,
+                    'is_active': client.is_active,
+                    'created_at': client.created_at.isoformat(),
+                    'updated_at': client.updated_at.isoformat()
+                }
+            })
+        
+        elif request.method == 'PUT':
+            try:
+                data = json.loads(request.body)
+                
+                # Update fields if provided
+                if 'client_name' in data:
+                    client.client_name = data['client_name']
+                if 'company_name' in data:
+                    client.company_name = data['company_name']
+                if 'email' in data:
+                    client.email = data['email']
+                if 'phone' in data:
+                    client.phone = data['phone']
+                if 'address' in data:
+                    client.address = data['address']
+                if 'contact_person' in data:
+                    client.contact_person = data['contact_person']
+                if 'is_active' in data:
+                    client.is_active = data['is_active']
+                
+                client.save()
+                
+                return JsonResponse({
+                    'status': 'success',
+                    'message': 'Client updated successfully',
+                    'data': {
+                        'id': str(client.id),
+                        'client_id': client.client_id,
+                        'client_name': client.client_name,
+                        'updated_at': client.updated_at.isoformat()
+                    }
+                })
+                
+            except json.JSONDecodeError:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invalid JSON format'
+                }, status=400)
+            except ValidationError as e:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Validation error: {str(e)}'
+                }, status=400)
+        
+        elif request.method == 'DELETE':
+            client.delete()
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Client deleted successfully'
+            })
+            
+    except DoesNotExist:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Client not found'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def client_search(request):
+    """
+    Search clients by various criteria
+    Query parameters:
+    - name: Search by client name (case-insensitive)
+    - email: Search by email
+    - company: Search by company name
+    - active: Filter by active status (true/false)
+    """
+    try:
+        # Get query parameters
+        name = request.GET.get('name', '')
+        email = request.GET.get('email', '')
+        company = request.GET.get('company', '')
+        active = request.GET.get('active', '')
+        
+        # Build query
+        query = {}
+        if name:
+            query['client_name__icontains'] = name
+        if email:
+            query['email__icontains'] = email
+        if company:
+            query['company_name__icontains'] = company
+        if active:
+            query['is_active'] = active.lower() == 'true'
+        
+        clients = Client.objects.filter(**query)
+        
+        data = []
+        for client in clients:
+            data.append({
+                'id': str(client.id),
+                'client_id': client.client_id,
+                'client_name': client.client_name,
+                'company_name': client.company_name,
+                'email': client.email,
+                'phone': client.phone,
+                'is_active': client.is_active
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'data': data,
+            'total': len(data),
+            'filters_applied': {
+                'name': name,
+                'email': email,
+                'company': company,
+                'active': active
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def client_stats(request):
+    """
+    Get client statistics
+    """
+    try:
+        total_clients = Client.objects.count()
+        active_clients = Client.objects.filter(is_active=True).count()
+        inactive_clients = Client.objects.filter(is_active=False).count()
+        
+        return JsonResponse({
+            'status': 'success',
+            'data': {
+                'total_clients': total_clients,
+                'active_clients': active_clients,
+                'inactive_clients': inactive_clients,
+                'activity_rate': round((active_clients / total_clients * 100), 2) if total_clients > 0 else 0
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
