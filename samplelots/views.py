@@ -29,7 +29,9 @@ def sample_lot_list(request):
             db = connection.get_db()
             sample_lots_collection = db.sample_lots
             
-            sample_lots = sample_lots_collection.find({'is_active': True})
+            # Query to find active sample lots or documents without is_active field (legacy data)
+            query = {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
+            sample_lots = sample_lots_collection.find(query)
             data = []
             
             for sample_lot_doc in sample_lots:
@@ -42,30 +44,31 @@ def sample_lot_list(request):
                         'project_name': job.project_name,
                         'client_id': str(job.client_id)
                     }
-                except DoesNotExist:
+                except (DoesNotExist, Exception):
                     job_info = {'job_id': 'Unknown', 'project_name': 'Unknown', 'client_id': ''}
                 
-                # Get test methods information
-                test_methods = []
+                # Get test methods information (names and count)
                 test_method_oids = sample_lot_doc.get('test_method_oids', [])
-                for test_method_oid in test_method_oids:
-                    try:
-                        test_method = TestMethod.objects.get(id=ObjectId(test_method_oid))
-                        test_methods.append({
-                            'id': str(test_method.id),
-                            'method_id': test_method.method_id,
-                            'method_name': test_method.method_name,
-                            'method_type': test_method.method_type,
-                            'standard': test_method.standard
-                        })
-                    except DoesNotExist:
-                        test_methods.append({
-                            'id': str(test_method_oid),
-                            'method_id': 'Unknown',
-                            'method_name': 'Unknown Method',
-                            'method_type': 'Unknown',
-                            'standard': ''
-                        })
+                test_methods_count = len(test_method_oids) if test_method_oids else 0
+                test_method_names = []
+                
+                # Fetch test method names from test_methods collection
+                if test_method_oids:
+                    test_methods_collection = db.test_methods
+                    for test_method_oid in test_method_oids:
+                        try:
+                            test_method_doc = test_methods_collection.find_one(
+                                {'_id': ObjectId(test_method_oid)}, 
+                                {'test_name': 1}
+                            )
+                            if test_method_doc:
+                                test_method_names.append({
+                                    'id': str(test_method_doc.get('_id')),
+                                    'test_name': test_method_doc.get('test_name', 'Unknown Test')
+                                })
+                        except Exception:
+                            # Skip invalid test method references
+                            continue
                 
                 data.append({
                     'id': str(sample_lot_doc.get('_id', '')),
@@ -79,7 +82,8 @@ def sample_lot_list(request):
                     'description': sample_lot_doc.get('description', ''),
                     'mtc_no': sample_lot_doc.get('mtc_no', ''),
                     'storage_location': sample_lot_doc.get('storage_location', ''),
-                    'test_methods': test_methods,
+                    'test_methods_count': test_methods_count,
+                    'test_methods': test_method_names,
                     'created_at': sample_lot_doc.get('created_at').isoformat() if sample_lot_doc.get('created_at') else '',
                     'updated_at': sample_lot_doc.get('updated_at').isoformat() if sample_lot_doc.get('updated_at') else ''
                 })
@@ -120,15 +124,34 @@ def sample_lot_list(request):
             # Validate test method IDs if provided
             test_method_oids = []
             if 'test_method_oids' in data and data['test_method_oids']:
+                # Use raw MongoDB query to validate test methods (consistent with other operations)
+                db = connection.get_db()
+                test_methods_collection = db.test_methods
+                
                 for test_method_id in data['test_method_oids']:
                     try:
-                        test_method = TestMethod.objects.get(id=ObjectId(test_method_id))
-                        test_method_oids.append(ObjectId(test_method_id))
-                    except (DoesNotExist, Exception):
+                        # Validate ObjectId format
+                        test_method_object_id = ObjectId(test_method_id)
+                        
+                        # Check if test method exists using raw query
+                        test_method_doc = test_methods_collection.find_one({
+                            '_id': test_method_object_id,
+                            '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]
+                        })
+                        
+                        if not test_method_doc:
+                            return JsonResponse({
+                                'status': 'error',
+                                'message': f'Test method with ID {test_method_id} not found'
+                            }, status=404)
+                            
+                        test_method_oids.append(test_method_object_id)
+                        
+                    except Exception:
                         return JsonResponse({
                             'status': 'error',
-                            'message': f'Test method with ID {test_method_id} not found'
-                        }, status=404)
+                            'message': f'Invalid test method ID format: {test_method_id}'
+                        }, status=400)
             
             sample_lot = SampleLot(
                 job_id=ObjectId(data['job_id']),
@@ -174,11 +197,11 @@ def sample_lot_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
-def sample_lot_detail(request, item_no):
+def sample_lot_detail(request, sample_lot_id):
     """
-    Get, update, or delete a specific sample lot by item_no
+    Get, update, or delete a specific sample lot by ObjectId
     GET: Returns sample lot details with job and test method information
-    PUT: Updates sample lot information
+    PUT: Updates sample lot information (partial update supported)
     DELETE: Deletes the sample lot
     """
     try:
@@ -186,7 +209,15 @@ def sample_lot_detail(request, item_no):
         db = connection.get_db()
         sample_lots_collection = db.sample_lots
         
-        sample_lot_doc = sample_lots_collection.find_one({'item_no': item_no, 'is_active': True})
+        # Use raw query to find sample lot by ObjectId (legacy data support)
+        try:
+            query = {'_id': ObjectId(sample_lot_id), '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
+            sample_lot_doc = sample_lots_collection.find_one(query)
+        except Exception:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid sample lot ID format'
+            }, status=400)
         if not sample_lot_doc:
             return JsonResponse({
                 'status': 'error',
@@ -211,27 +242,28 @@ def sample_lot_detail(request, item_no):
             # Get test methods information
             test_methods = []
             test_method_oids = sample_lot_doc.get('test_method_oids', [])
-            for test_method_oid in test_method_oids:
-                try:
-                    test_method = TestMethod.objects.get(id=ObjectId(test_method_oid))
-                    test_methods.append({
-                        'id': str(test_method.id),
-                        'method_id': test_method.method_id,
-                        'method_name': test_method.method_name,
-                        'method_type': test_method.method_type,
-                        'standard': test_method.standard,
-                        'description': test_method.description,
-                        'unit': test_method.unit,
-                        'min_value': test_method.min_value,
-                        'max_value': test_method.max_value
-                    })
-                except DoesNotExist:
-                    test_methods.append({
-                        'id': str(test_method_oid),
-                        'method_id': 'Unknown',
-                        'method_name': 'Unknown Method',
-                        'method_type': 'Unknown'
-                    })
+            if test_method_oids:
+                test_methods_collection = db.test_methods
+                for test_method_oid in test_method_oids:
+                    try:
+                        test_method_doc = test_methods_collection.find_one(
+                            {'_id': ObjectId(test_method_oid)}
+                        )
+                        if test_method_doc:
+                            test_methods.append({
+                                'id': str(test_method_doc.get('_id')),
+                                'test_name': test_method_doc.get('test_name', 'Unknown Test'),
+                                'test_description': test_method_doc.get('test_description', ''),
+                                'test_columns': test_method_doc.get('test_columns', []),
+                                'hasImage': test_method_doc.get('hasImage', False)
+                            })
+                    except Exception:
+                        # Add placeholder for invalid test method references
+                        test_methods.append({
+                            'id': str(test_method_oid),
+                            'test_name': 'Unknown Test Method',
+                            'test_description': 'Test method not found'
+                        })
             
             return JsonResponse({
                 'status': 'success',
@@ -257,7 +289,7 @@ def sample_lot_detail(request, item_no):
             try:
                 data = json.loads(request.body)
                 
-                # Prepare update document
+                # Prepare update document (partial update support)
                 update_doc = {}
                 
                 # Update job_id if provided
@@ -274,41 +306,66 @@ def sample_lot_detail(request, item_no):
                 # Update test method IDs if provided
                 if 'test_method_oids' in data:
                     test_method_oids = []
+                    test_methods_collection = db.test_methods
+                    
                     for test_method_id in data['test_method_oids']:
                         try:
-                            test_method = TestMethod.objects.get(id=ObjectId(test_method_id))
-                            test_method_oids.append(ObjectId(test_method_id))
-                        except (DoesNotExist, Exception):
+                            # Validate ObjectId format
+                            test_method_object_id = ObjectId(test_method_id)
+                            
+                            # Check if test method exists using raw query
+                            test_method_doc = test_methods_collection.find_one({
+                                '_id': test_method_object_id,
+                                '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]
+                            })
+                            
+                            if not test_method_doc:
+                                return JsonResponse({
+                                    'status': 'error',
+                                    'message': f'Test method with ID {test_method_id} not found'
+                                }, status=404)
+                                
+                            test_method_oids.append(test_method_object_id)
+                            
+                        except Exception:
                             return JsonResponse({
                                 'status': 'error',
-                                'message': f'Test method with ID {test_method_id} not found'
-                            }, status=404)
+                                'message': f'Invalid test method ID format: {test_method_id}'
+                            }, status=400)
+                    
                     update_doc['test_method_oids'] = test_method_oids
                 
-                # Update other fields if provided
-                update_fields = ['sample_type', 'material_type', 'condition', 'heat_no', 
-                               'description', 'mtc_no', 'storage_location']
-                for field in update_fields:
+                # Update other fields if provided (partial update support)
+                updatable_fields = ['item_no', 'sample_type', 'material_type', 'condition', 'heat_no', 
+                                   'description', 'mtc_no', 'storage_location']
+                for field in updatable_fields:
                     if field in data:
                         update_doc[field] = data[field]
+                
+                # Only proceed if there are fields to update
+                if not update_doc:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'No valid fields provided for update'
+                    }, status=400)
                 
                 # Add updated timestamp
                 update_doc['updated_at'] = datetime.now()
                 
-                # Update the document
-                result = sample_lots_collection.update_one(
-                    {'item_no': item_no, 'is_active': True},
+                # Update the document (legacy data support)
+                update_result = sample_lots_collection.update_one(
+                    {'_id': ObjectId(sample_lot_id), '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]},
                     {'$set': update_doc}
                 )
                 
-                if result.modified_count == 0:
+                if update_result.modified_count == 0:
                     return JsonResponse({
                         'status': 'error',
-                        'message': 'No changes made'
-                    }, status=400)
+                        'message': 'Sample lot not found or no changes made'
+                    }, status=404)
                 
                 # Get updated sample lot document
-                updated_sample_lot = sample_lots_collection.find_one({'item_no': item_no})
+                updated_sample_lot = sample_lots_collection.find_one({'_id': ObjectId(sample_lot_id)})
                 
                 return JsonResponse({
                     'status': 'success',
@@ -333,9 +390,9 @@ def sample_lot_detail(request, item_no):
                 }, status=400)
         
         elif request.method == 'DELETE':
-            # Soft delete by setting is_active to False
+            # Soft delete by setting is_active to False (legacy data support)
             result = sample_lots_collection.update_one(
-                {'item_no': item_no, 'is_active': True},
+                {'_id': ObjectId(sample_lot_id), '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]},
                 {'$set': {'is_active': False, 'updated_at': datetime.now()}}
             )
             
@@ -375,8 +432,8 @@ def sample_lot_search(request):
         material_type = request.GET.get('material_type', '')
         item_no = request.GET.get('item_no', '')
         
-        # Build query for raw MongoDB
-        query = {'is_active': True}
+        # Build query for raw MongoDB (legacy data support)
+        query = {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
         if job_id:
             try:
                 query['job_id'] = ObjectId(job_id)
@@ -448,22 +505,23 @@ def sample_lot_stats(request):
     Get sample lot statistics
     """
     try:
-        # Use raw query to count sample lots
+        # Use raw query to count sample lots (legacy data support)
         db = connection.get_db()
         sample_lots_collection = db.sample_lots
         
-        total_sample_lots = sample_lots_collection.count_documents({'is_active': True})
+        base_query = {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
+        total_sample_lots = sample_lots_collection.count_documents(base_query)
         
-        # Count by sample type
+        # Count by sample type (legacy data support)
         sample_type_stats = sample_lots_collection.aggregate([
-            {'$match': {'is_active': True}},
+            {'$match': base_query},
             {'$group': {'_id': '$sample_type', 'count': {'$sum': 1}}},
             {'$sort': {'count': -1}}
         ])
         
-        # Count by material type
+        # Count by material type (legacy data support)
         material_type_stats = sample_lots_collection.aggregate([
-            {'$match': {'is_active': True}},
+            {'$match': base_query},
             {'$group': {'_id': '$material_type', 'count': {'$sum': 1}}},
             {'$sort': {'count': -1}}
         ])
@@ -500,11 +558,12 @@ def sample_lot_by_job(request, job_id):
                 'message': 'Job not found'
             }, status=404)
         
-        # Use raw query to find sample lots by job
+        # Use raw query to find sample lots by job (legacy data support)
         db = connection.get_db()
         sample_lots_collection = db.sample_lots
         
-        sample_lots = sample_lots_collection.find({'job_id': ObjectId(job_id), 'is_active': True})
+        query = {'job_id': job.id, '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
+        sample_lots = sample_lots_collection.find(query)
         
         data = []
         for sample_lot_doc in sample_lots:

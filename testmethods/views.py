@@ -11,6 +11,25 @@ from mongoengine.errors import DoesNotExist, ValidationError
 from .models import TestMethod
 
 
+def safe_datetime_format(dt_value):
+    """
+    Safely format datetime value to ISO format string
+    Handles both datetime objects and string values
+    """
+    if not dt_value:
+        return ''
+    
+    # If it's already a string, return as is
+    if isinstance(dt_value, str):
+        return dt_value
+    
+    # If it's a datetime object, convert to ISO format
+    try:
+        return dt_value.isoformat()
+    except (AttributeError, TypeError):
+        return str(dt_value) if dt_value else ''
+
+
 # ============= TEST METHOD CRUD ENDPOINTS =============
 
 @csrf_exempt
@@ -27,20 +46,19 @@ def test_method_list(request):
             db = connection.get_db()
             test_methods_collection = db.test_methods
             
-            test_methods = test_methods_collection.find({'is_active': True})
+            query = {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
+            test_methods = test_methods_collection.find(query)
             data = []
             
             for test_method_doc in test_methods:
                 data.append({
                     'id': str(test_method_doc.get('_id', '')),
-                    'new_test_id': test_method_doc.get('new_test_id'),
                     'test_name': test_method_doc.get('test_name', ''),
                     'test_description': test_method_doc.get('test_description', ''),
                     'test_columns': test_method_doc.get('test_columns', []),
                     'hasImage': test_method_doc.get('hasImage', False),
-                    'old_key': test_method_doc.get('old_key', ''),
-                    'createdAt': test_method_doc.get('createdAt').isoformat() if test_method_doc.get('createdAt') else '',
-                    'updatedAt': test_method_doc.get('updatedAt').isoformat() if test_method_doc.get('updatedAt') else ''
+                    'createdAt': safe_datetime_format(test_method_doc.get('createdAt')),
+                    'updatedAt': safe_datetime_format(test_method_doc.get('updatedAt'))
                 })
             
             return JsonResponse({
@@ -59,21 +77,19 @@ def test_method_list(request):
             data = json.loads(request.body)
             
             # Validate required fields
-            required_fields = ['new_test_id', 'test_name']
+            required_fields = ['test_name']
             for field in required_fields:
-                if field not in data or data[field] is None:
+                if field not in data or not data[field]:
                     return JsonResponse({
                         'status': 'error',
                         'message': f'Required field "{field}" is missing or empty'
                     }, status=400)
             
             test_method = TestMethod(
-                new_test_id=data['new_test_id'],
                 test_name=data['test_name'],
                 test_description=data.get('test_description', ''),
                 test_columns=data.get('test_columns', []),
-                hasImage=data.get('hasImage', False),
-                old_key=data.get('old_key', '')
+                hasImage=data.get('hasImage', False)
             )
             test_method.save()
             
@@ -82,7 +98,6 @@ def test_method_list(request):
                 'message': 'Test method created successfully',
                 'data': {
                     'id': str(test_method.id),
-                    'new_test_id': test_method.new_test_id,
                     'test_name': test_method.test_name
                 }
             }, status=201)
@@ -102,13 +117,11 @@ def test_method_list(request):
                 'status': 'error',
                 'message': str(e)
             }, status=400)
-
-
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
-def test_method_detail(request, new_test_id):
+def test_method_detail(request, test_method_id):
     """
-    Get, update, or delete a specific test method by new_test_id
+    Get, update, or delete a specific test method by ObjectId
     GET: Returns test method details
     PUT: Updates test method information
     DELETE: Deletes the test method
@@ -118,7 +131,15 @@ def test_method_detail(request, new_test_id):
         db = connection.get_db()
         test_methods_collection = db.test_methods
         
-        test_method_doc = test_methods_collection.find_one({'new_test_id': int(new_test_id), 'is_active': True})
+        # Use raw query to find test method by ObjectId (legacy data support)
+        try:
+            query = {'_id': ObjectId(test_method_id), '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
+            test_method_doc = test_methods_collection.find_one(query)
+        except Exception:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid test method ID format'
+            }, status=400)
         if not test_method_doc:
             return JsonResponse({
                 'status': 'error',
@@ -130,16 +151,14 @@ def test_method_detail(request, new_test_id):
                 'status': 'success',
                 'data': {
                     'id': str(test_method_doc.get('_id', '')),
-                    'new_test_id': test_method_doc.get('new_test_id'),
                     'test_name': test_method_doc.get('test_name', ''),
                     'test_description': test_method_doc.get('test_description', ''),
                     'test_columns': test_method_doc.get('test_columns', []),
                     'hasImage': test_method_doc.get('hasImage', False),
-                    'old_key': test_method_doc.get('old_key', ''),
-                    'createdAt': test_method_doc.get('createdAt').isoformat() if test_method_doc.get('createdAt') else '',
-                    'updatedAt': test_method_doc.get('updatedAt').isoformat() if test_method_doc.get('updatedAt') else ''
-                }
-            })
+                    'createdAt': safe_datetime_format(test_method_doc.get('createdAt')),
+                    'updatedAt': safe_datetime_format(test_method_doc.get('updatedAt'))
+                }}
+            )
         
         elif request.method == 'PUT':
             try:
@@ -149,7 +168,7 @@ def test_method_detail(request, new_test_id):
                 update_doc = {}
                 
                 # Update fields if provided
-                update_fields = ['test_name', 'test_description', 'test_columns', 'hasImage', 'old_key']
+                update_fields = ['test_name', 'test_description', 'test_columns', 'hasImage']
                 for field in update_fields:
                     if field in data:
                         update_doc[field] = data[field]
@@ -157,9 +176,9 @@ def test_method_detail(request, new_test_id):
                 # Add updated timestamp
                 update_doc['updatedAt'] = datetime.now()
                 
-                # Update the document
+                # Update the document (legacy data support)
                 result = test_methods_collection.update_one(
-                    {'new_test_id': int(new_test_id), 'is_active': True},
+                    {'_id': ObjectId(test_method_id), '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]},
                     {'$set': update_doc}
                 )
                 
@@ -170,16 +189,15 @@ def test_method_detail(request, new_test_id):
                     }, status=400)
                 
                 # Get updated test method document
-                updated_test_method = test_methods_collection.find_one({'new_test_id': int(new_test_id)})
+                updated_test_method = test_methods_collection.find_one({'_id': ObjectId(test_method_id)})
                 
                 return JsonResponse({
                     'status': 'success',
                     'message': 'Test method updated successfully',
                     'data': {
                         'id': str(updated_test_method.get('_id', '')),
-                        'new_test_id': updated_test_method.get('new_test_id'),
                         'test_name': updated_test_method.get('test_name', ''),
-                        'updatedAt': updated_test_method.get('updatedAt').isoformat() if updated_test_method.get('updatedAt') else ''
+                        'updatedAt': safe_datetime_format(updated_test_method.get('updatedAt'))
                     }
                 })
                 
@@ -195,9 +213,9 @@ def test_method_detail(request, new_test_id):
                 }, status=400)
         
         elif request.method == 'DELETE':
-            # Soft delete by setting is_active to False
+            # Soft delete by setting is_active to False (legacy data support)
             result = test_methods_collection.update_one(
-                {'new_test_id': int(new_test_id), 'is_active': True},
+                {'_id': ObjectId(test_method_id), '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]},
                 {'$set': {'is_active': False, 'updatedAt': datetime.now()}}
             )
             
@@ -235,8 +253,8 @@ def test_method_search(request):
         test_description = request.GET.get('test_description', '')
         has_image = request.GET.get('hasImage', '')
         
-        # Build query for raw MongoDB
-        query = {'is_active': True}
+        # Build query for raw MongoDB (legacy data support)
+        query = {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
         if test_name:
             query['test_name'] = {'$regex': test_name, '$options': 'i'}
         if test_description:
@@ -254,11 +272,10 @@ def test_method_search(request):
         for test_method_doc in test_methods:
             data.append({
                 'id': str(test_method_doc.get('_id', '')),
-                'new_test_id': test_method_doc.get('new_test_id'),
                 'test_name': test_method_doc.get('test_name', ''),
                 'test_description': test_method_doc.get('test_description', ''),
                 'hasImage': test_method_doc.get('hasImage', False),
-                'createdAt': test_method_doc.get('createdAt').isoformat() if test_method_doc.get('createdAt') else ''
+                'createdAt': safe_datetime_format(test_method_doc.get('createdAt'))
             })
         
         return JsonResponse({
@@ -290,36 +307,45 @@ def test_method_stats(request):
         db = connection.get_db()
         test_methods_collection = db.test_methods
         
-        total_test_methods = test_methods_collection.count_documents({'is_active': True})
+        # Use raw query to count test methods (legacy data support)
+        base_query = {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
+        total_test_methods = test_methods_collection.count_documents(base_query)
         
-        # Count by hasImage flag
+        # Count by hasImage flag (legacy data support)
         image_stats = test_methods_collection.aggregate([
-            {'$match': {'is_active': True}},
+            {'$match': base_query},
             {'$group': {'_id': '$hasImage', 'count': {'$sum': 1}}},
             {'$sort': {'count': -1}}
         ])
         
-        # Count test methods created by month
-        monthly_stats = test_methods_collection.aggregate([
-            {'$match': {'is_active': True}},
-            {
-                '$group': {
-                    '_id': {
-                        'year': {'$year': '$createdAt'},
-                        'month': {'$month': '$createdAt'}
-                    },
-                    'count': {'$sum': 1}
-                }
-            },
-            {'$sort': {'_id.year': -1, '_id.month': -1}}
-        ])
+        # Count test methods created by month (legacy data support)
+        # Skip monthly stats if createdAt field has inconsistent data types
+        try:
+            monthly_stats = test_methods_collection.aggregate([
+                {'$match': base_query},
+                {'$match': {'createdAt': {'$type': 'date'}}},  # Only process actual date objects
+                {
+                    '$group': {
+                        '_id': {
+                            'year': {'$year': '$createdAt'},
+                            'month': {'$month': '$createdAt'}
+                        },
+                        'count': {'$sum': 1}
+                    }
+                },
+                {'$sort': {'_id.year': -1, '_id.month': -1}}
+            ])
+            monthly_stats_list = list(monthly_stats)
+        except Exception:
+            # If aggregation fails due to data type issues, return empty stats
+            monthly_stats_list = []
         
         return JsonResponse({
             'status': 'success',
             'data': {
                 'total_test_methods': total_test_methods,
                 'image_support_distribution': list(image_stats),
-                'monthly_creation_stats': list(monthly_stats)
+                'monthly_creation_stats': monthly_stats_list
             }
         })
         

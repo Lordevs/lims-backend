@@ -14,5 +14,5 @@ urlpatterns = [
     # path('job/<str:job_id>/delete/', views.delete_sample_lots_by_job, name='delete_sample_lots_by_job'), # DELETE: Cascade delete by job
     
     # Detail endpoint - this must come LAST to avoid conflicts
-    path('<str:item_no>/', views.sample_lot_detail, name='sample_lot_detail'),       # GET: Detail, PUT: Update, DELETE: Delete
+    path('<str:sample_lot_id>/', views.sample_lot_detail, name='sample_lot_detail'),       # GET: Detail, PUT: Update, DELETE: Delete
 ]

@@ -12,5 +12,5 @@ urlpatterns = [
     path('stats/', views.test_method_stats, name='test_method_stats'),               # GET: Test method statistics
     
     # Detail endpoint - this must come LAST to avoid conflicts
-    path('<int:new_test_id>/', views.test_method_detail, name='test_method_detail'), # GET: Detail, PUT: Update, DELETE: Delete
+    path('<str:test_method_id>/', views.test_method_detail, name='test_method_detail'), # GET: Detail, PUT: Update, DELETE: Delete
 ]
