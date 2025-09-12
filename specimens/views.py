@@ -110,19 +110,28 @@ def specimen_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
-def specimen_detail(request, specimen_id):
+def specimen_detail(request, object_id):
     """
-    Get, update, or delete a specific specimen by specimen_id
+    Get, update, or delete a specific specimen by ObjectId
     GET: Returns specimen details
-    PUT: Updates specimen_id (new specimen_id must be unique)
+    PUT: Partial update of specimen (can update specimen_id, must be unique)
     DELETE: Deletes the specimen
     """
     try:
-        # Use raw query to find specimen by specimen_id
+        # Validate ObjectId format
+        try:
+            obj_id = ObjectId(object_id)
+        except Exception:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid ObjectId format'
+            }, status=400)
+        
+        # Use raw query to find specimen by ObjectId
         db = connection.get_db()
         specimens_collection = db.specimens
         
-        specimen_doc = specimens_collection.find_one({'specimen_id': specimen_id})
+        specimen_doc = specimens_collection.find_one({'_id': obj_id})
         if not specimen_doc:
             return JsonResponse({
                 'status': 'error',
@@ -144,6 +153,13 @@ def specimen_detail(request, specimen_id):
             try:
                 data = json.loads(request.body)
                 
+                # Check if request body is empty
+                if not data:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'Request body cannot be empty'
+                    }, status=400)
+                
                 # Prepare update document
                 update_doc = {}
                 
@@ -151,10 +167,21 @@ def specimen_detail(request, specimen_id):
                 if 'specimen_id' in data:
                     new_specimen_id = data['specimen_id']
                     
+                    # Validate specimen_id is not empty
+                    if not new_specimen_id:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': 'specimen_id cannot be empty'
+                        }, status=400)
+                    
                     # Check if new specimen_id is different from current
-                    if new_specimen_id != specimen_id:
+                    current_specimen_id = specimen_doc.get('specimen_id')
+                    if new_specimen_id != current_specimen_id:
                         # Check if new specimen_id already exists
-                        existing_specimen = specimens_collection.find_one({'specimen_id': new_specimen_id})
+                        existing_specimen = specimens_collection.find_one({
+                            'specimen_id': new_specimen_id,
+                            '_id': {'$ne': obj_id}  # Exclude current document
+                        })
                         if existing_specimen:
                             return JsonResponse({
                                 'status': 'error',
@@ -166,7 +193,8 @@ def specimen_detail(request, specimen_id):
                 # Add updated timestamp
                 update_doc['updated_at'] = datetime.now()
                 
-                if not update_doc or len(update_doc) == 1:  # Only timestamp was added
+                # Check if there are any actual changes
+                if len(update_doc) == 1:  # Only timestamp was added
                     return JsonResponse({
                         'status': 'error',
                         'message': 'No changes provided'
@@ -174,7 +202,7 @@ def specimen_detail(request, specimen_id):
                 
                 # Update the document
                 result = specimens_collection.update_one(
-                    {'specimen_id': specimen_id},
+                    {'_id': obj_id},
                     {'$set': update_doc}
                 )
                 
@@ -185,9 +213,7 @@ def specimen_detail(request, specimen_id):
                     }, status=400)
                 
                 # Get updated specimen document
-                updated_specimen = specimens_collection.find_one(
-                    {'specimen_id': update_doc.get('specimen_id', specimen_id)}
-                )
+                updated_specimen = specimens_collection.find_one({'_id': obj_id})
                 
                 return JsonResponse({
                     'status': 'success',
@@ -195,6 +221,7 @@ def specimen_detail(request, specimen_id):
                     'data': {
                         'id': str(updated_specimen.get('_id', '')),
                         'specimen_id': updated_specimen.get('specimen_id', ''),
+                        'created_at': updated_specimen.get('created_at').isoformat() if updated_specimen.get('created_at') else '',
                         'updated_at': updated_specimen.get('updated_at').isoformat() if updated_specimen.get('updated_at') else ''
                     }
                 })
@@ -206,7 +233,7 @@ def specimen_detail(request, specimen_id):
                 }, status=400)
         
         elif request.method == 'DELETE':
-            result = specimens_collection.delete_one({'specimen_id': specimen_id})
+            result = specimens_collection.delete_one({'_id': obj_id})
             if result.deleted_count == 0:
                 return JsonResponse({
                     'status': 'error',
@@ -217,7 +244,8 @@ def specimen_detail(request, specimen_id):
                 'status': 'success',
                 'message': 'Specimen deleted successfully',
                 'data': {
-                    'specimen_id': specimen_id,
+                    'id': str(obj_id),
+                    'specimen_id': specimen_doc.get('specimen_id', ''),
                     'deleted_at': datetime.now().isoformat()
                 }
             })

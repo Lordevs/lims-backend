@@ -13,5 +13,5 @@ urlpatterns = [
     path('bulk-delete/', views.bulk_delete_specimens, name='bulk_delete_specimens'), # DELETE: Bulk delete specimens
     
     # Detail endpoint - this must come LAST to avoid conflicts
-    path('<str:specimen_id>/', views.specimen_detail, name='specimen_detail'),   # GET: Detail, PUT: Update, DELETE: Delete
+    path('<str:object_id>/', views.specimen_detail, name='specimen_detail'),   # GET: Detail, PUT: Update, DELETE: Delete
 ]

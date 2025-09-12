@@ -26,9 +26,9 @@ def certificate_list(request):
         try:
             # Use raw query to get all active certificates
             db = connection.get_db()
-            certificates_collection = db.certificates
+            certificates_collection = db.complete_certificates
             
-            certificates = certificates_collection.find({'is_active': True})
+            certificates = certificates_collection.find({})
             data = []
             
             for cert_doc in certificates:
@@ -37,18 +37,108 @@ def certificate_list(request):
                     'request_id': str(cert_doc.get('request_id', '')),
                     'request_no': 'Unknown',
                     'sample_lots_count': 0,
-                    'total_specimens': 0
+                    'total_specimens': 0,
+                    'sample_lots': [],
+                    'specimens': []
                 }
                 
                 try:
-                    sample_prep = SamplePreparation.objects.get(id=ObjectId(cert_doc.get('request_id')))
-                    request_info.update({
-                        'request_no': sample_prep.request_no,
-                        'sample_lots_count': len(sample_prep.sample_lots),
-                        'total_specimens': sum(len(sl.specimen_oids) for sl in sample_prep.sample_lots)
-                    })
-                except (DoesNotExist, Exception):
-                    pass
+                    # request_id is the ObjectId of the sample preparation
+                    sample_prep_id = cert_doc.get('request_id')
+                    if sample_prep_id:
+                        # Use raw MongoDB query to find sample preparation
+                        sample_prep_collection = db.sample_preparations
+                        sample_prep_doc = sample_prep_collection.find_one({'_id': ObjectId(sample_prep_id)})
+                        
+                        if sample_prep_doc:
+                            # Get detailed sample lots and specimens information
+                            sample_lots_details = []
+                            all_specimens = []
+                            
+                            for sample_lot in sample_prep_doc.get('sample_lots', []):
+                                # Get sample lot information
+                                sample_lot_obj = None
+                                sample_lot_info = {
+                                    'sample_lot_id': str(sample_lot.get('sample_lot_id', '')),
+                                    'item_no': 'Unknown',
+                                    'sample_type': 'Unknown',
+                                    'material_type': 'Unknown',
+                                    'job_id': 'Unknown'
+                                }
+                                
+                                try:
+                                    sample_lots_collection = db.sample_lots
+                                    sample_lot_obj = sample_lots_collection.find_one({'_id': ObjectId(sample_lot.get('sample_lot_id'))})
+                                    if sample_lot_obj:
+                                        sample_lot_info.update({
+                                            'item_no': sample_lot_obj.get('item_no', 'Unknown'),
+                                            'sample_type': sample_lot_obj.get('sample_type', 'Unknown'),
+                                            'material_type': sample_lot_obj.get('material_type', 'Unknown')
+                                        })
+                                        
+                                        # Get job information
+                                        try:
+                                            jobs_collection = db.jobs
+                                            job_obj = jobs_collection.find_one({'_id': sample_lot_obj.get('job_id')})
+                                            if job_obj:
+                                                sample_lot_info['job_id'] = job_obj.get('job_id', 'Unknown')
+                                        except Exception:
+                                            pass
+                                except Exception:
+                                    pass
+                                
+                                # Get test method information
+                                test_method_info = {
+                                    'test_method_oid': str(sample_lot.get('test_method_oid', '')),
+                                    'test_name': 'Unknown Method'
+                                }
+                                try:
+                                    test_methods_collection = db.test_methods
+                                    test_method_obj = test_methods_collection.find_one({'_id': ObjectId(sample_lot.get('test_method_oid'))})
+                                    if test_method_obj:
+                                        test_method_info['test_name'] = test_method_obj.get('test_name', 'Unknown Method')
+                                except Exception:
+                                    pass
+                                
+                                # Get specimens information for this sample lot
+                                sample_lot_specimens = []
+                                for specimen_oid in sample_lot.get('specimen_oids', []):
+                                    specimen_info = {
+                                        'specimen_oid': str(specimen_oid),
+                                        'specimen_id': 'Unknown'
+                                    }
+                                    try:
+                                        specimens_collection = db.specimens
+                                        specimen_obj = specimens_collection.find_one({'_id': ObjectId(specimen_oid)})
+                                        if specimen_obj:
+                                            specimen_info['specimen_id'] = specimen_obj.get('specimen_id', 'Unknown')
+                                    except Exception:
+                                        pass
+                                    
+                                    sample_lot_specimens.append(specimen_info)
+                                    all_specimens.append(specimen_info)
+                                
+                                sample_lots_details.append({
+                                    'item_description': sample_lot.get('item_description', ''),
+                                    'planned_test_date': sample_lot.get('planned_test_date'),
+                                    'dimension_spec': sample_lot.get('dimension_spec'),
+                                    'request_by': sample_lot.get('request_by'),
+                                    'remarks': sample_lot.get('remarks'),
+                                    'sample_lot_info': sample_lot_info,
+                                    'test_method': test_method_info,
+                                    'specimens': sample_lot_specimens,
+                                    'specimens_count': len(sample_lot_specimens)
+                                })
+                            
+                            request_info.update({
+                                'request_no': sample_prep_doc.get('request_no', 'Unknown'),
+                                'sample_lots_count': len(sample_prep_doc.get('sample_lots', [])),
+                                'total_specimens': len(all_specimens),
+                                'sample_lots': sample_lots_details,
+                                'specimens': all_specimens
+                            })
+                except (DoesNotExist, Exception) as e:
+                    print(f"Error fetching sample preparation: {e}")
                 
                 data.append({
                     'id': str(cert_doc.get('_id', '')),
@@ -160,9 +250,9 @@ def certificate_detail(request, certificate_id):
     try:
         # Use raw query to find certificate by certificate_id
         db = connection.get_db()
-        certificates_collection = db.certificates
+        certificates_collection = db.complete_certificates
         
-        cert_doc = certificates_collection.find_one({'certificate_id': certificate_id, 'is_active': True})
+        cert_doc = certificates_collection.find_one({'certificate_id': certificate_id})
         if not cert_doc:
             return JsonResponse({
                 'status': 'error',
@@ -176,32 +266,129 @@ def certificate_detail(request, certificate_id):
                 'request_no': 'Unknown',
                 'sample_lots_count': 0,
                 'total_specimens': 0,
-                'sample_lots_summary': []
+                'sample_lots': [],
+                'specimens': []
             }
             
             try:
-                sample_prep = SamplePreparation.objects.get(id=ObjectId(cert_doc.get('request_id')))
-                
-                # Get sample lots summary
-                sample_lots_summary = []
-                for sample_lot in sample_prep.sample_lots:
-                    sample_lots_summary.append({
-                        'item_description': sample_lot.item_description,
-                        'planned_test_date': sample_lot.planned_test_date,
-                        'request_by': sample_lot.request_by,
-                        'specimens_count': len(sample_lot.specimen_oids)
-                    })
-                
-                request_info.update({
-                    'request_no': sample_prep.request_no,
-                    'sample_lots_count': len(sample_prep.sample_lots),
-                    'total_specimens': sum(len(sl.specimen_oids) for sl in sample_prep.sample_lots),
-                    'sample_lots_summary': sample_lots_summary,
-                    'created_at': sample_prep.created_at.isoformat() if sample_prep.created_at else '',
-                    'updated_at': sample_prep.updated_at.isoformat() if sample_prep.updated_at else ''
-                })
-            except (DoesNotExist, Exception):
-                pass
+                # request_id is the ObjectId of the sample preparation
+                sample_prep_id = cert_doc.get('request_id')
+                if sample_prep_id:
+                    # Use raw MongoDB query to find sample preparation
+                    sample_prep_collection = db.sample_preparations
+                    sample_prep_doc = sample_prep_collection.find_one({'_id': ObjectId(sample_prep_id)})
+                    
+                    if sample_prep_doc:
+                        # Get detailed sample lots and specimens information
+                        sample_lots_details = []
+                        all_specimens = []
+                        
+                        for sample_lot in sample_prep_doc.get('sample_lots', []):
+                            # Get sample lot information
+                            sample_lot_obj = None
+                            sample_lot_info = {
+                                'sample_lot_id': str(sample_lot.get('sample_lot_id', '')),
+                                'item_no': 'Unknown',
+                                'sample_type': 'Unknown',
+                                'material_type': 'Unknown',
+                                'description': 'Unknown',
+                                'job_id': 'Unknown',
+                                'job_details': {}
+                            }
+                            
+                            try:
+                                sample_lots_collection = db.sample_lots
+                                sample_lot_obj = sample_lots_collection.find_one({'_id': ObjectId(sample_lot.get('sample_lot_id'))})
+                                if sample_lot_obj:
+                                    sample_lot_info.update({
+                                        'item_no': sample_lot_obj.get('item_no', 'Unknown'),
+                                        'sample_type': sample_lot_obj.get('sample_type', 'Unknown'),
+                                        'material_type': sample_lot_obj.get('material_type', 'Unknown'),
+                                        'description': sample_lot_obj.get('description', 'Unknown')
+                                    })
+                                    
+                                    # Get job information
+                                    try:
+                                        jobs_collection = db.jobs
+                                        job_obj = jobs_collection.find_one({'_id': sample_lot_obj.get('job_id')})
+                                        if job_obj:
+                                            sample_lot_info['job_id'] = job_obj.get('job_id', 'Unknown')
+                                            sample_lot_info['job_details'] = {
+                                                'project_name': job_obj.get('project_name', ''),
+                                                'end_user': job_obj.get('end_user', ''),
+                                                'receive_date': job_obj.get('receive_date', '')
+                                            }
+                                    except Exception:
+                                        pass
+                            except Exception:
+                                pass
+                            
+                            # Get test method information
+                            test_method_info = {
+                                'test_method_oid': str(sample_lot.get('test_method_oid', '')),
+                                'test_name': 'Unknown Method',
+                                'test_description': 'Unknown'
+                            }
+                            try:
+                                test_methods_collection = db.test_methods
+                                test_method_obj = test_methods_collection.find_one({'_id': ObjectId(sample_lot.get('test_method_oid'))})
+                                if test_method_obj:
+                                    test_method_info.update({
+                                        'test_name': test_method_obj.get('test_name', 'Unknown Method'),
+                                        'test_description': test_method_obj.get('test_description', 'Unknown'),
+                                        'test_columns': test_method_obj.get('test_columns', []),
+                                        'hasImage': test_method_obj.get('hasImage', False)
+                                    })
+                            except Exception:
+                                pass
+                            
+                            # Get specimens information for this sample lot
+                            sample_lot_specimens = []
+                            for specimen_oid in sample_lot.get('specimen_oids', []):
+                                specimen_info = {
+                                    'specimen_oid': str(specimen_oid),
+                                    'specimen_id': 'Unknown',
+                                    'created_at': '',
+                                    'updated_at': ''
+                                }
+                                try:
+                                    specimens_collection = db.specimens
+                                    specimen_obj = specimens_collection.find_one({'_id': ObjectId(specimen_oid)})
+                                    if specimen_obj:
+                                        specimen_info.update({
+                                            'specimen_id': specimen_obj.get('specimen_id', 'Unknown'),
+                                            'created_at': specimen_obj.get('created_at').isoformat() if specimen_obj.get('created_at') else '',
+                                            'updated_at': specimen_obj.get('updated_at').isoformat() if specimen_obj.get('updated_at') else ''
+                                        })
+                                except Exception:
+                                    pass
+                                
+                                sample_lot_specimens.append(specimen_info)
+                                all_specimens.append(specimen_info)
+                            
+                            sample_lots_details.append({
+                                'item_description': sample_lot.get('item_description', ''),
+                                'planned_test_date': sample_lot.get('planned_test_date'),
+                                'dimension_spec': sample_lot.get('dimension_spec'),
+                                'request_by': sample_lot.get('request_by'),
+                                'remarks': sample_lot.get('remarks'),
+                                'sample_lot_info': sample_lot_info,
+                                'test_method': test_method_info,
+                                'specimens': sample_lot_specimens,
+                                'specimens_count': len(sample_lot_specimens)
+                            })
+                        
+                        request_info.update({
+                            'request_no': sample_prep_doc.get('request_no', 'Unknown'),
+                            'sample_lots_count': len(sample_prep_doc.get('sample_lots', [])),
+                            'total_specimens': len(all_specimens),
+                            'sample_lots': sample_lots_details,
+                            'specimens': all_specimens,
+                            'created_at': sample_prep_doc.get('created_at').isoformat() if sample_prep_doc.get('created_at') else '',
+                            'updated_at': sample_prep_doc.get('updated_at').isoformat() if sample_prep_doc.get('updated_at') else ''
+                        })
+            except (DoesNotExist, Exception) as e:
+                print(f"Error fetching sample preparation: {e}")
             
             return JsonResponse({
                 'status': 'success',
@@ -248,7 +435,7 @@ def certificate_detail(request, certificate_id):
                 
                 # Update the document
                 result = certificates_collection.update_one(
-                    {'certificate_id': certificate_id, 'is_active': True},
+                    {'certificate_id': certificate_id},
                     {'$set': update_doc}
                 )
                 
@@ -284,13 +471,12 @@ def certificate_detail(request, certificate_id):
                 }, status=400)
         
         elif request.method == 'DELETE':
-            # Soft delete by setting is_active to False
-            result = certificates_collection.update_one(
-                {'certificate_id': certificate_id, 'is_active': True},
-                {'$set': {'is_active': False, 'updated_at': datetime.now()}}
+            # Delete the document completely
+            result = certificates_collection.delete_one(
+                {'certificate_id': certificate_id}
             )
             
-            if result.modified_count == 0:
+            if result.deleted_count == 0:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Certificate not found'
@@ -331,7 +517,7 @@ def certificate_search(request):
         issue_date = request.GET.get('issue_date', '')
         
         # Build query for raw MongoDB
-        query = {'is_active': True}
+        query = {}
         if cert_id:
             query['certificate_id'] = {'$regex': cert_id, '$options': 'i'}
         if customer:
@@ -343,7 +529,7 @@ def certificate_search(request):
         
         # Use raw query to search
         db = connection.get_db()
-        certificates_collection = db.certificates
+        certificates_collection = db.complete_certificates
         
         certificates = certificates_collection.find(query)
         
@@ -352,8 +538,15 @@ def certificate_search(request):
             # Get basic sample preparation info
             request_no = 'Unknown'
             try:
-                sample_prep = SamplePreparation.objects.get(id=ObjectId(cert_doc.get('request_id')))
-                request_no = sample_prep.request_no
+                # request_id is the ObjectId of the sample preparation
+                sample_prep_id = cert_doc.get('request_id')
+                if sample_prep_id:
+                    # Use raw MongoDB query to find sample preparation
+                    sample_prep_collection = db.sample_preparations
+                    sample_prep_doc = sample_prep_collection.find_one({'_id': ObjectId(sample_prep_id)})
+                    
+                    if sample_prep_doc:
+                        request_no = sample_prep_doc.get('request_no', 'Unknown')
             except (DoesNotExist, Exception):
                 pass
             
@@ -396,13 +589,13 @@ def certificate_stats(request):
     try:
         # Use raw query for statistics
         db = connection.get_db()
-        certificates_collection = db.certificates
+        certificates_collection = db.complete_certificates
         
-        total_certificates = certificates_collection.count_documents({'is_active': True})
+        total_certificates = certificates_collection.count_documents({})
         
         # Count by month of issue
         monthly_stats = certificates_collection.aggregate([
-            {'$match': {'is_active': True, 'issue_date': {'$ne': ''}}},
+            {'$match': {'issue_date': {'$ne': ''}}},
             {
                 '$addFields': {
                     'issue_year_month': {
@@ -421,7 +614,7 @@ def certificate_stats(request):
         
         # Count by tested_by
         tester_stats = certificates_collection.aggregate([
-            {'$match': {'is_active': True, 'tested_by': {'$ne': ''}}},
+            {'$match': {'tested_by': {'$ne': ''}}},
             {'$group': {'_id': '$tested_by', 'count': {'$sum': 1}}},
             {'$sort': {'count': -1}}
         ])
@@ -449,22 +642,24 @@ def certificate_by_request(request, request_no):
     Get certificates for a specific sample preparation request
     """
     try:
-        # First find the sample preparation by request_no
-        try:
-            sample_prep = SamplePreparation.objects.get(request_no=request_no)
-        except DoesNotExist:
+        # First find the sample preparation by request_no using raw MongoDB query
+        db = connection.get_db()
+        sample_prep_collection = db.sample_preparations
+        sample_prep_doc = sample_prep_collection.find_one({'request_no': request_no})
+        
+        if not sample_prep_doc:
             return JsonResponse({
                 'status': 'error',
                 'message': f'Sample preparation request "{request_no}" not found'
             }, status=404)
         
-        # Use raw query to find certificates by request_id
-        db = connection.get_db()
-        certificates_collection = db.certificates
+        sample_prep_id = sample_prep_doc.get('_id')
+        
+        # Use raw query to find certificates by request_id (sample preparation ObjectId)
+        certificates_collection = db.complete_certificates
         
         certificates = certificates_collection.find({
-            'request_id': sample_prep.id,
-            'is_active': True
+            'request_id': sample_prep_id
         })
         
         data = []
@@ -484,9 +679,9 @@ def certificate_by_request(request, request_no):
             'data': data,
             'total': len(data),
             'request_info': {
-                'request_no': sample_prep.request_no,
-                'sample_lots_count': len(sample_prep.sample_lots),
-                'total_specimens': sum(len(sl.specimen_oids) for sl in sample_prep.sample_lots)
+                'request_no': sample_prep_doc.get('request_no', ''),
+                'sample_lots_count': len(sample_prep_doc.get('sample_lots', [])),
+                'total_specimens': sum(len(sl.get('specimen_oids', [])) for sl in sample_prep_doc.get('sample_lots', []))
             }
         })
         

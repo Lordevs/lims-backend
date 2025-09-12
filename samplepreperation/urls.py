@@ -12,5 +12,5 @@ urlpatterns = [
     path('stats/', views.sample_preparation_stats, name='sample_preparation_stats'),                 # GET: Sample preparation statistics
     
     # Detail endpoint - this must come LAST to avoid conflicts
-    path('<str:request_no>/', views.sample_preparation_detail, name='sample_preparation_detail'),    # GET: Detail, PUT: Update, DELETE: Delete
+    path('<str:object_id>/', views.sample_preparation_detail, name='sample_preparation_detail'),    # GET: Detail, PUT: Update, DELETE: Delete
 ]

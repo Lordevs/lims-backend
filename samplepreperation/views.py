@@ -40,62 +40,94 @@ def sample_preparation_list(request):
                 for sample_lot in prep_doc.get('sample_lots', []):
                     # Get sample lot information with job details
                     sample_lot_info = {
-                        'sample_lot_id': str(sample_lot.get('sample_lot_id', '')),
+                        'request_id': str(sample_lot.get('sample_lot_id', '')),
                         'item_no': 'Unknown',
                         'sample_type': 'Unknown',
                         'material_type': 'Unknown',
                         'job_id': 'Unknown'
                     }
-                    try:
-                        sample_lot_obj = SampleLot.objects.get(id=ObjectId(sample_lot.get('sample_lot_id')))
-                        sample_lot_info.update({
-                            'item_no': sample_lot_obj.item_no,
-                            'sample_type': sample_lot_obj.sample_type,
-                            'material_type': sample_lot_obj.material_type
-                        })
-                        
-                        # Get job information from the sample lot's job_id
+                    
+                    # Debug: Check if sample_lot_id exists and is valid
+                    sample_lot_id = sample_lot.get('sample_lot_id')
+                    if sample_lot_id:
                         try:
-                            job = Job.objects.get(id=ObjectId(sample_lot_obj.job_id))
-                            sample_lot_info['job_id'] = job.job_id
-                        except (DoesNotExist, Exception):
-                            sample_lot_info['job_id'] = 'Unknown'
+                            # Convert to ObjectId if it's a string
+                            if isinstance(sample_lot_id, str):
+                                sample_lot_id = ObjectId(sample_lot_id)
                             
-                    except (DoesNotExist, Exception):
-                        sample_lot_info.update({
-                            'item_no': 'Unknown',
-                            'sample_type': 'Unknown',
-                            'material_type': 'Unknown',
-                            'job_id': 'Unknown'
-                        })
+                            sample_lot_obj = SampleLot.objects.get(id=sample_lot_id)
+                            sample_lot_info.update({
+                                'item_no': sample_lot_obj.item_no,
+                                'sample_type': sample_lot_obj.sample_type,
+                                'material_type': sample_lot_obj.material_type
+                            })
+                            
+                            # Get job information from the sample lot's job_id
+                            try:
+                                if hasattr(sample_lot_obj, 'job_id') and sample_lot_obj.job_id:
+                                    job = Job.objects.get(id=sample_lot_obj.job_id)
+                                    sample_lot_info['job_id'] = job.job_id
+                                else:
+                                    sample_lot_info['job_id'] = 'No Job ID'
+                            except (DoesNotExist, Exception) as e:
+                                sample_lot_info['job_id'] = f'Job Error: {str(e)[:50]}'
+                                
+                        except (DoesNotExist, Exception) as e:
+                            sample_lot_info.update({
+                                'item_no': f'Sample Lot Error: {str(e)[:50]}',
+                                'sample_type': 'Unknown',
+                                'material_type': 'Unknown',
+                                'job_id': 'Unknown'
+                            })
                     
-                    # Get test method name
-                    test_method_name = 'Unknown Method'
-                    try:
-                        test_method = TestMethod.objects.get(id=ObjectId(sample_lot.get('test_method_oid')))
-                        test_method_name = test_method.test_name
-                    except (DoesNotExist, Exception):
-                        pass
+                    # Get test method information
+                    test_method = {
+                        'test_method_oid': str(sample_lot.get('test_method_oid', '')),
+                        'test_name': 'Unknown Method'
+                    }
                     
-                    # Get specimens names list
-                    specimen_names = []
-                    for specimen_oid in sample_lot.get('specimen_oids', []):
+                    test_method_oid = sample_lot.get('test_method_oid')
+                    if test_method_oid:
                         try:
-                            specimen = Specimen.objects.get(id=ObjectId(specimen_oid))
-                            specimen_names.append(specimen.specimen_id)
-                        except (DoesNotExist, Exception):
-                            specimen_names.append('Unknown')
+                            # Convert to ObjectId if it's a string
+                            if isinstance(test_method_oid, str):
+                                test_method_oid = ObjectId(test_method_oid)
+                            
+                            test_method_obj = TestMethod.objects.get(id=test_method_oid)
+                            test_method['test_name'] = test_method_obj.test_name
+                        except (DoesNotExist, Exception) as e:
+                            test_method['test_name'] = f'Test Method Error: {str(e)[:50]}'
+                    
+                    # Get specimens information
+                    specimens_info = []
+                    for specimen_oid in sample_lot.get('specimen_oids', []):
+                        specimen_data = {
+                            'specimen_oid': str(specimen_oid),
+                            'specimen_id': 'Unknown'
+                        }
+                        try:
+                            # Convert to ObjectId if it's a string
+                            if isinstance(specimen_oid, str):
+                                specimen_oid = ObjectId(specimen_oid)
+                            
+                            specimen = Specimen.objects.get(id=specimen_oid)
+                            specimen_data['specimen_id'] = specimen.specimen_id
+                        except (DoesNotExist, Exception) as e:
+                            specimen_data['specimen_id'] = f'Specimen Error: {str(e)[:30]}'
+                        specimens_info.append(specimen_data)
                     
                     sample_lots_data.append({
                         'item_description': sample_lot.get('item_description', ''),
-                        'planned_test_date': sample_lot.get('planned_test_date', ''),
-                        'dimension_spec': sample_lot.get('dimension_spec', ''),
-                        'request_by': sample_lot.get('request_by', ''),
-                        'remarks': sample_lot.get('remarks', ''),
+                        'planned_test_date': sample_lot.get('planned_test_date'),
+                        'dimension_spec': sample_lot.get('dimension_spec'),
+                        'request_by': sample_lot.get('request_by'),
+                        'remarks': sample_lot.get('remarks'),
+                        'request_id': sample_lot_info['request_id'],
+                        'test_method': test_method,
                         'job_id': sample_lot_info['job_id'],
                         'item_no': sample_lot_info['item_no'],
-                        'test_method_name': test_method_name,
-                        'specimens_count': len(specimen_names)
+                        'specimens': specimens_info,
+                        'specimens_count': len(specimens_info)
                     })
                 
                 data.append({
@@ -122,8 +154,55 @@ def sample_preparation_list(request):
         try:
             data = json.loads(request.body)
             
-            # Validate required fields
-            required_fields = ['request_no', 'sample_lots']
+            # Auto-generate request_no if not provided
+            if 'request_no' not in data or not data['request_no']:
+                # Generate request_no automatically
+                current_year = datetime.now().year
+                year_prefix = f"REQ-{current_year}-"
+                
+                # Find the latest request_no for current year
+                db = connection.get_db()
+                sample_preparations_collection = db.sample_preparations
+                
+                # Query for requests from current year, sorted by request_no descending
+                latest_request = sample_preparations_collection.find(
+                    {'request_no': {'$regex': f'^{year_prefix}', '$options': 'i'}}
+                ).sort('request_no', -1).limit(1)
+                
+                latest_request_list = list(latest_request)
+                
+                if latest_request_list:
+                    # Extract sequence number from latest request
+                    latest_request_no = latest_request_list[0]['request_no']
+                    try:
+                        # Extract the sequence number (last 4 digits)
+                        sequence_part = latest_request_no.split('-')[-1]
+                        next_sequence = int(sequence_part) + 1
+                    except (ValueError, IndexError):
+                        # If parsing fails, start from 1
+                        next_sequence = 1
+                else:
+                    # No previous requests for this year, start from 1
+                    next_sequence = 1
+                
+                # Format sequence number with leading zeros (4 digits)
+                formatted_sequence = str(next_sequence).zfill(4)
+                generated_request_no = f"{year_prefix}{formatted_sequence}"
+                
+                # Check if generated request_no already exists (safety check)
+                existing_check = sample_preparations_collection.find_one({'request_no': generated_request_no})
+                if existing_check:
+                    # If somehow it exists, increment until we find available one
+                    while existing_check:
+                        next_sequence += 1
+                        formatted_sequence = str(next_sequence).zfill(4)
+                        generated_request_no = f"{year_prefix}{formatted_sequence}"
+                        existing_check = sample_preparations_collection.find_one({'request_no': generated_request_no})
+                
+                data['request_no'] = generated_request_no
+            
+            # Validate required fields (request_no is now auto-generated if not provided)
+            required_fields = ['sample_lots']
             for field in required_fields:
                 if field not in data or not data[field]:
                     return JsonResponse({
@@ -142,15 +221,15 @@ def sample_preparation_list(request):
             validated_sample_lots = []
             for i, sample_lot_data in enumerate(data['sample_lots']):
                 # Validate required fields for each sample lot
-                sample_lot_required = ['item_description', 'request_by', 'sample_lot_id', 'test_method_oid', 'specimen_oids']
+                sample_lot_required = ['item_description', 'sample_lot_id', 'test_method_oid', 'specimen_oids']
                 for field in sample_lot_required:
-                    if field not in sample_lot_data or not sample_lot_data[field]:
+                    if field not in sample_lot_data:
                         return JsonResponse({
                             'status': 'error',
                             'message': f'Required field "{field}" is missing in sample_lots[{i}]'
                         }, status=400)
                 
-                # Validate sample lot exists
+                # Validate sample_lot_id (sample lot) exists
                 try:
                     sample_lot = SampleLot.objects.get(id=ObjectId(sample_lot_data['sample_lot_id']))
                 except (DoesNotExist, Exception):
@@ -189,11 +268,11 @@ def sample_preparation_list(request):
                 # Create validated sample lot info
                 sample_lot_info = SampleLotInfo(
                     item_description=sample_lot_data['item_description'],
-                    planned_test_date=sample_lot_data.get('planned_test_date', ''),
-                    dimension_spec=sample_lot_data.get('dimension_spec', ''),
-                    request_by=sample_lot_data['request_by'],
-                    remarks=sample_lot_data.get('remarks', ''),
-                    sample_lot_id=ObjectId(sample_lot_data['sample_lot_id']),
+                    planned_test_date=sample_lot_data.get('planned_test_date'),
+                    dimension_spec=sample_lot_data.get('dimension_spec'),
+                    request_by=sample_lot_data.get('request_by'),
+                    remarks=sample_lot_data.get('remarks'),
+                    request_id=ObjectId(sample_lot_data['sample_lot_id']),  # Note: stored as sample_lot_id in MongoDB but field name is request_id
                     test_method_oid=ObjectId(sample_lot_data['test_method_oid']),
                     specimen_oids=validated_specimen_oids
                 )
@@ -240,19 +319,28 @@ def sample_preparation_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
-def sample_preparation_detail(request, request_no):
+def sample_preparation_detail(request, object_id):
     """
-    Get, update, or delete a specific sample preparation by request_no
+    Get, update, or delete a specific sample preparation by ObjectId
     GET: Returns sample preparation details with complete relationship data
-    PUT: Updates sample preparation
+    PUT: Partial update of sample preparation
     DELETE: Deletes the sample preparation
     """
     try:
-        # Use raw query to find sample preparation by request_no
+        # Validate ObjectId format
+        try:
+            obj_id = ObjectId(object_id)
+        except Exception:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid ObjectId format'
+            }, status=400)
+        
+        # Use raw query to find sample preparation by ObjectId
         db = connection.get_db()
         sample_preparations_collection = db.sample_preparations
         
-        prep_doc = sample_preparations_collection.find_one({'request_no': request_no})
+        prep_doc = sample_preparations_collection.find_one({'_id': obj_id})
         if not prep_doc:
             return JsonResponse({
                 'status': 'error',
@@ -265,14 +353,14 @@ def sample_preparation_detail(request, request_no):
             for sample_lot in prep_doc.get('sample_lots', []):
                 # Get detailed sample lot information with job details
                 sample_lot_info = {
-                    'sample_lot_id': str(sample_lot.get('sample_lot_id', '')),
+                    'request_id': str(sample_lot.get('request_id', '')),
                     'item_no': 'Unknown',
                     'sample_type': 'Unknown',
                     'material_type': 'Unknown',
                     'job_id': 'Unknown'
                 }
                 try:
-                    sample_lot_obj = SampleLot.objects.get(id=ObjectId(sample_lot.get('sample_lot_id')))
+                    sample_lot_obj = SampleLot.objects.get(id=ObjectId(sample_lot.get('request_id')))
                     sample_lot_info.update({
                         'item_no': sample_lot_obj.item_no,
                         'sample_type': sample_lot_obj.sample_type,
@@ -289,52 +377,59 @@ def sample_preparation_detail(request, request_no):
                 except (DoesNotExist, Exception):
                     pass
                 
-                # Get detailed test method information
+                # Get test method information
+                test_method = {
+                    'test_method_oid': str(sample_lot.get('test_method_oid', '')),
+                    'test_name': 'Unknown Method'
+                }
+                try:
+                    test_method_obj = TestMethod.objects.get(id=ObjectId(sample_lot.get('test_method_oid')))
+                    test_method['test_name'] = test_method_obj.test_name
+                except (DoesNotExist, Exception):
+                    pass
+                
+                # Get detailed test method information for detail view
                 test_method_info = {
                     'test_method_oid': str(sample_lot.get('test_method_oid', '')),
-                    'new_test_id': 'Unknown',
                     'test_name': 'Unknown Method',
                     'test_description': 'Unknown'
                 }
                 try:
-                    test_method = TestMethod.objects.get(id=ObjectId(sample_lot.get('test_method_oid')))
+                    test_method_obj = TestMethod.objects.get(id=ObjectId(sample_lot.get('test_method_oid')))
                     test_method_info.update({
-                        'new_test_id': test_method.new_test_id,
-                        'test_name': test_method.test_name,
-                        'test_description': test_method.test_description,
-                        'test_columns': test_method.test_columns,
-                        'hasImage': test_method.hasImage,
-                        'old_key': test_method.old_key
+                        'test_name': test_method_obj.test_name,
+                        'test_description': test_method_obj.test_description,
+                        'test_columns': test_method_obj.test_columns,
+                        'hasImage': test_method_obj.hasImage
                     })
                 except (DoesNotExist, Exception):
                     pass
                 
                 # Get detailed specimens information
                 specimens_info = []
-                specimen_names = []
                 for specimen_oid in sample_lot.get('specimen_oids', []):
                     specimen_data = {
-                        'id': str(specimen_oid),
+                        'specimen_oid': str(specimen_oid),
                         'specimen_id': 'Unknown'
                     }
                     try:
                         specimen = Specimen.objects.get(id=ObjectId(specimen_oid))
                         specimen_data['specimen_id'] = specimen.specimen_id
-                        specimen_names.append(specimen.specimen_id)
                     except (DoesNotExist, Exception):
-                        specimen_names.append('Unknown')
+                        pass
                     specimens_info.append(specimen_data)
                 
                 sample_lots_data.append({
                     'item_description': sample_lot.get('item_description', ''),
-                    'planned_test_date': sample_lot.get('planned_test_date', ''),
-                    'dimension_spec': sample_lot.get('dimension_spec', ''),
-                    'request_by': sample_lot.get('request_by', ''),
-                    'remarks': sample_lot.get('remarks', ''),
+                    'planned_test_date': sample_lot.get('planned_test_date'),
+                    'dimension_spec': sample_lot.get('dimension_spec'),
+                    'request_by': sample_lot.get('request_by'),
+                    'remarks': sample_lot.get('remarks'),
+                    'request_id': sample_lot_info['request_id'],
+                    'test_method': test_method,
                     'job_id': sample_lot_info['job_id'],
                     'item_no': sample_lot_info['item_no'],
                     'sample_lot_info': sample_lot_info,
-                    'test_method_name': test_method_info['test_name'],
                     'test_method_info': test_method_info,
                     'specimens': specimens_info,
                     'specimens_count': len(specimens_info)
@@ -354,18 +449,28 @@ def sample_preparation_detail(request, request_no):
             })
         
         elif request.method == 'PUT':
-            # Implementation for updating sample preparation
             try:
                 data = json.loads(request.body)
+                
+                # Check if request body is empty
+                if not data:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'Request body cannot be empty'
+                    }, status=400)
                 
                 update_doc = {}
                 
                 # Update request_no if provided
                 if 'request_no' in data:
                     new_request_no = data['request_no']
-                    if new_request_no != request_no:
+                    current_request_no = prep_doc.get('request_no')
+                    if new_request_no != current_request_no:
                         # Check if new request_no already exists
-                        existing_prep = sample_preparations_collection.find_one({'request_no': new_request_no})
+                        existing_prep = sample_preparations_collection.find_one({
+                            'request_no': new_request_no,
+                            '_id': {'$ne': obj_id}
+                        })
                         if existing_prep:
                             return JsonResponse({
                                 'status': 'error',
@@ -373,12 +478,30 @@ def sample_preparation_detail(request, request_no):
                             }, status=400)
                         update_doc['request_no'] = new_request_no
                 
-                # Update sample_lots if provided (simplified - would need full validation like POST)
+                # Update sample_lots if provided (with validation)
                 if 'sample_lots' in data:
-                    return JsonResponse({
-                        'status': 'error',
-                        'message': 'Updating sample_lots is complex. Please use DELETE and CREATE for now.'
-                    }, status=400)
+                    sample_lots_data = data['sample_lots']
+                    if not isinstance(sample_lots_data, list):
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': 'sample_lots must be an array'
+                        }, status=400)
+                    
+                    # Validate each sample lot (simplified validation)
+                    validated_sample_lots = []
+                    for i, sample_lot_data in enumerate(sample_lots_data):
+                        # Basic validation
+                        required_fields = ['item_description', 'request_id', 'test_method_oid', 'specimen_oids']
+                        for field in required_fields:
+                            if field not in sample_lot_data:
+                                return JsonResponse({
+                                    'status': 'error',
+                                    'message': f'Required field "{field}" missing in sample_lots[{i}]'
+                                }, status=400)
+                        
+                        validated_sample_lots.append(sample_lot_data)
+                    
+                    update_doc['sample_lots'] = validated_sample_lots
                 
                 update_doc['updated_at'] = datetime.now()
                 
@@ -390,7 +513,7 @@ def sample_preparation_detail(request, request_no):
                 
                 # Update the document
                 result = sample_preparations_collection.update_one(
-                    {'request_no': request_no},
+                    {'_id': obj_id},
                     {'$set': update_doc}
                 )
                 
@@ -400,12 +523,17 @@ def sample_preparation_detail(request, request_no):
                         'message': 'No changes made'
                     }, status=400)
                 
+                # Get updated document
+                updated_prep = sample_preparations_collection.find_one({'_id': obj_id})
+                
                 return JsonResponse({
                     'status': 'success',
                     'message': 'Sample preparation updated successfully',
                     'data': {
-                        'request_no': update_doc.get('request_no', request_no),
-                        'updated_at': update_doc['updated_at'].isoformat()
+                        'id': str(updated_prep['_id']),
+                        'request_no': updated_prep.get('request_no', ''),
+                        'sample_lots_count': len(updated_prep.get('sample_lots', [])),
+                        'updated_at': updated_prep['updated_at'].isoformat()
                     }
                 })
                 
@@ -416,7 +544,7 @@ def sample_preparation_detail(request, request_no):
                 }, status=400)
         
         elif request.method == 'DELETE':
-            result = sample_preparations_collection.delete_one({'request_no': request_no})
+            result = sample_preparations_collection.delete_one({'_id': obj_id})
             if result.deleted_count == 0:
                 return JsonResponse({
                     'status': 'error',
@@ -427,7 +555,8 @@ def sample_preparation_detail(request, request_no):
                 'status': 'success',
                 'message': 'Sample preparation deleted successfully',
                 'data': {
-                    'request_no': request_no,
+                    'id': str(obj_id),
+                    'request_no': prep_doc.get('request_no', ''),
                     'deleted_at': datetime.now().isoformat()
                 }
             })

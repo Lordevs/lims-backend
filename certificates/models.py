@@ -30,13 +30,12 @@ class Certificate(Document):
     request_id = fields.ObjectIdField(required=True)     # Reference to SamplePreparation._id
     
     # System fields
-    is_active = fields.BooleanField(default=True)
     created_at = fields.DateTimeField(default=datetime.now)
     updated_at = fields.DateTimeField(default=datetime.now)
     
     meta = {
-        'collection': 'certificates',
-        'indexes': ['certificate_id', 'request_id', 'issue_date', 'is_active']
+        'collection': 'complete_certificates',
+        'indexes': ['certificate_id', 'request_id', 'issue_date']
     }
     
     def save(self, *args, **kwargs):
