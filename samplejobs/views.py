@@ -76,7 +76,6 @@ def job_list(request):
                 # Get client information
                 client_name = "Unknown Client"
                 try:
-                    from bson import ObjectId
                     client = Client.objects.get(id=ObjectId(job_doc.get('client_id')))
                     client_name = client.client_name
                 except (DoesNotExist, Exception):
@@ -125,11 +124,11 @@ def job_list(request):
             # Verify client exists
             try:
                 client = Client.objects.get(id=ObjectId(data['client_id']))
-            except (DoesNotExist, Exception):
+            except (DoesNotExist, Exception) as e:
                 return JsonResponse({
                     'status': 'error',
-                    'message': 'Client not found'
-                }, status=404)
+                    'message': f'Client not found: {str(e)}'
+                }, status=400)
             
             # Parse receive_date
             try:
@@ -181,20 +180,29 @@ def job_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
-def job_detail(request, job_id):
+def job_detail(request, object_id):
     """
-    Get, update, or delete a specific job by job_id
+    Get, update, or delete a specific job by ObjectId
     GET: Returns job details with client information
     PUT: Updates job information
     DELETE: Deletes the job
     """
     try:
-        # Use raw query to find job by job_id
+        # Convert string object_id to ObjectId
+        try:
+            object_id = ObjectId(object_id)
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Invalid ObjectId format: {str(e)}'
+            }, status=400)
+        
+        # Use raw query to find job by ObjectId
         from mongoengine import connection
         db = connection.get_db()
         jobs_collection = db.jobs
         
-        job_doc = jobs_collection.find_one({'job_id': job_id})
+        job_doc = jobs_collection.find_one({'_id': object_id})
         if not job_doc:
             return JsonResponse({
                 'status': 'error',
@@ -272,12 +280,19 @@ def job_detail(request, job_id):
                 if 'remarks' in data:
                     update_doc['remarks'] = data['remarks']
                 
+                # Check if any fields were provided for update
+                if not update_doc:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'No fields provided for update'
+                    }, status=400)
+                
                 # Add updated timestamp
                 update_doc['updated_at'] = datetime.now()
                 
                 # Update the document
                 result = jobs_collection.update_one(
-                    {'job_id': job_id},
+                    {'_id': object_id},
                     {'$set': update_doc}
                 )
                 
@@ -288,7 +303,7 @@ def job_detail(request, job_id):
                     }, status=400)
                 
                 # Get updated job document
-                updated_job = jobs_collection.find_one({'job_id': job_id})
+                updated_job = jobs_collection.find_one({'_id': object_id})
                 
                 # Get updated client name
                 client_name = "Unknown Client"
@@ -304,8 +319,14 @@ def job_detail(request, job_id):
                     'data': {
                         'id': str(updated_job.get('_id', '')),
                         'job_id': updated_job.get('job_id', ''),
+                        'client_id': str(updated_job.get('client_id', '')),
                         'project_name': updated_job.get('project_name', ''),
-                        'client_name': client_name,
+                        'end_user': updated_job.get('end_user', ''),
+                        'receive_date': updated_job.get('receive_date').isoformat() if updated_job.get('receive_date') else '',
+                        'received_by': updated_job.get('received_by', ''),
+                        'remarks': updated_job.get('remarks', ''),
+                        'job_created_at': updated_job.get('job_created_at').isoformat() if updated_job.get('job_created_at') else '',
+                        'created_at': updated_job.get('created_at').isoformat() if updated_job.get('created_at') else '',
                         'updated_at': updated_job.get('updated_at').isoformat() if updated_job.get('updated_at') else ''
                     }
                 })
@@ -325,7 +346,8 @@ def job_detail(request, job_id):
             # Get the job's ObjectId for cascading delete
             job_object_id = job_doc.get('_id')
             job_info = {
-                'job_id': job_id,
+                'id': str(job_doc.get('_id', '')),
+                'job_id': job_doc.get('job_id', ''),
                 'project_name': job_doc.get('project_name', ''),
                 'client_id': str(job_doc.get('client_id', ''))
             }
@@ -334,7 +356,7 @@ def job_detail(request, job_id):
             deletion_summary = cascade_delete_job_relations(job_object_id, db)
             
             # Then delete the job itself
-            result = jobs_collection.delete_one({'job_id': job_id})
+            result = jobs_collection.delete_one({'_id': object_id})
             if result.deleted_count == 0:
                 return JsonResponse({
                     'status': 'error',
@@ -346,7 +368,7 @@ def job_detail(request, job_id):
             
             return JsonResponse({
                 'status': 'success',
-                'message': f'Job "{job_id}" deleted successfully. Also affected {total_cascaded} related records.',
+                'message': f'Job "{job_doc.get("job_id", "")}" deleted successfully. Also affected {total_cascaded} related records.',
                 'cascaded_deletions': deletion_summary,
                 'job_details': {
                     **job_info,
@@ -388,7 +410,6 @@ def job_search(request):
             query['project_name'] = {'$regex': project, '$options': 'i'}
         if client_id:
             try:
-                from bson import ObjectId
                 query['client_id'] = ObjectId(client_id)
             except Exception:
                 return JsonResponse({
@@ -410,7 +431,6 @@ def job_search(request):
             # Get client information
             client_name = "Unknown Client"
             try:
-                from bson import ObjectId
                 client = Client.objects.get(id=ObjectId(job_doc.get('client_id')))
                 client_name = client.client_name
             except (DoesNotExist, Exception):
@@ -474,14 +494,23 @@ def job_stats(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-def job_by_client(request, client_id):
+def job_by_client(request, object_id):
     """
     Get all jobs for a specific client
     """
     try:
+        # Convert string object_id to ObjectId
+        try:
+            object_id = ObjectId(object_id)
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Invalid ObjectId format: {str(e)}'
+            }, status=400)
+        
         # Verify client exists
         try:
-            client = Client.objects.get(id=ObjectId(client_id))
+            client = Client.objects.get(id=object_id)
         except (DoesNotExist, Exception):
             return JsonResponse({
                 'status': 'error',
@@ -493,7 +522,7 @@ def job_by_client(request, client_id):
         db = connection.get_db()
         jobs_collection = db.jobs
         
-        jobs = jobs_collection.find({'client_id': ObjectId(client_id)})
+        jobs = jobs_collection.find({'client_id': object_id})
         
         data = []
         for job_doc in jobs:

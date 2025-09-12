@@ -23,7 +23,7 @@ def client_list(request):
             for client in clients:
                 data.append({
                     'id': str(client.id),
-                    'client_id': client.client_id,
+                  
                     'client_name': client.client_name,
                     'company_name': client.company_name,
                     'email': client.email,
@@ -49,8 +49,8 @@ def client_list(request):
         try:
             data = json.loads(request.body)
             
-            # Validate required fields
-            required_fields = ['client_id', 'client_name', 'email', 'phone', 'address', 'contact_person']
+            # Validate required fields (client_id is now optional and will be auto-generated)
+            required_fields = ['client_name', 'email', 'phone', 'address', 'contact_person']
             for field in required_fields:
                 if field not in data or not data[field]:
                     return JsonResponse({
@@ -58,8 +58,19 @@ def client_list(request):
                         'message': f'Required field "{field}" is missing or empty'
                     }, status=400)
             
+            # Handle client_id - can be provided as integer or will be auto-generated
+            client_id = data.get('client_id')
+            if client_id is not None:
+                try:
+                    client_id = int(client_id)
+                except (ValueError, TypeError):
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'client_id must be an integer if provided'
+                    }, status=400)
+            
             client = Client(
-                client_id=data['client_id'],
+                client_id=client_id,  # Optional - will be auto-generated if None
                 client_name=data['client_name'],
                 company_name=data.get('company_name', ''),
                 email=data['email'],
@@ -100,22 +111,31 @@ def client_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
-def client_detail(request, client_id):
+def client_detail(request, object_id):
     """
-    Get, update, or delete a specific client by client_id
+    Get, update, or delete a specific client by ObjectId
     GET: Returns client details
     PUT: Updates client information
     DELETE: Deletes the client
     """
     try:
-        client = Client.objects.get(client_id=client_id)
+        # Convert object_id to ObjectId
+        try:
+            from bson import ObjectId
+            object_id = ObjectId(object_id)
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Invalid ObjectId format: {str(e)}'
+            }, status=400)
+            
+        client = Client.objects.get(id=object_id)
         
         if request.method == 'GET':
             return JsonResponse({
                 'status': 'success',
                 'data': {
                     'id': str(client.id),
-                    'client_id': client.client_id,
                     'client_name': client.client_name,
                     'company_name': client.company_name,
                     'email': client.email,
@@ -132,31 +152,47 @@ def client_detail(request, client_id):
             try:
                 data = json.loads(request.body)
                 
-                # Update fields if provided
-                if 'client_name' in data:
-                    client.client_name = data['client_name']
-                if 'company_name' in data:
-                    client.company_name = data['company_name']
-                if 'email' in data:
-                    client.email = data['email']
-                if 'phone' in data:
-                    client.phone = data['phone']
-                if 'address' in data:
-                    client.address = data['address']
-                if 'contact_person' in data:
-                    client.contact_person = data['contact_person']
-                if 'is_active' in data:
-                    client.is_active = data['is_active']
+                # Prepare update document for partial update
+                update_doc = {}
                 
-                client.save()
+                # Only update fields that are provided in the request
+                if 'client_name' in data:
+                    update_doc['client_name'] = data['client_name']
+                if 'company_name' in data:
+                    update_doc['company_name'] = data['company_name']
+                if 'email' in data:
+                    update_doc['email'] = data['email']
+                if 'phone' in data:
+                    update_doc['phone'] = data['phone']
+                if 'address' in data:
+                    update_doc['address'] = data['address']
+                if 'contact_person' in data:
+                    update_doc['contact_person'] = data['contact_person']
+                if 'is_active' in data:
+                    update_doc['is_active'] = data['is_active']
+                
+                # Add updated timestamp
+                update_doc['updated_at'] = datetime.now()
+                
+                # Use update() method for partial updates to avoid validation of unchanged fields
+                if update_doc:
+                    client.update(**update_doc)
+                    # Refresh the client object to get updated data
+                    client.reload()
                 
                 return JsonResponse({
                     'status': 'success',
                     'message': 'Client updated successfully',
                     'data': {
                         'id': str(client.id),
-                        'client_id': client.client_id,
                         'client_name': client.client_name,
+                        'company_name': client.company_name,
+                        'email': client.email,
+                        'phone': client.phone,
+                        'address': client.address,
+                        'contact_person': client.contact_person,
+                        'is_active': client.is_active,
+                        'created_at': client.created_at.isoformat(),
                         'updated_at': client.updated_at.isoformat()
                     }
                 })
