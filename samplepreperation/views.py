@@ -40,7 +40,7 @@ def sample_preparation_list(request):
                 for sample_lot in prep_doc.get('sample_lots', []):
                     # Get sample lot information with job details
                     sample_lot_info = {
-                        'request_id': str(sample_lot.get('sample_lot_id', '')),
+                        'sample_lot_id': str(sample_lot.get('sample_lot_id', '')),
                         'item_no': 'Unknown',
                         'sample_type': 'Unknown',
                         'material_type': 'Unknown',
@@ -122,7 +122,7 @@ def sample_preparation_list(request):
                         'dimension_spec': sample_lot.get('dimension_spec'),
                         'request_by': sample_lot.get('request_by'),
                         'remarks': sample_lot.get('remarks'),
-                        'request_id': sample_lot_info['request_id'],
+                        'sample_lot_id': sample_lot_info['sample_lot_id'],
                         'test_method': test_method,
                         'job_id': sample_lot_info['job_id'],
                         'item_no': sample_lot_info['item_no'],
@@ -163,6 +163,7 @@ def sample_preparation_list(request):
                 # Find the latest request_no for current year
                 db = connection.get_db()
                 sample_preparations_collection = db.sample_preparations
+                sample_lots_collection = db.sample_lots
                 
                 # Query for requests from current year, sorted by request_no descending
                 latest_request = sample_preparations_collection.find(
@@ -229,23 +230,36 @@ def sample_preparation_list(request):
                             'message': f'Required field "{field}" is missing in sample_lots[{i}]'
                         }, status=400)
                 
-                # Validate sample_lot_id (sample lot) exists
+                # Validate sample_lot_id (sample lot) exists using raw MongoDB query
                 try:
-                    sample_lot = SampleLot.objects.get(id=ObjectId(sample_lot_data['sample_lot_id']))
-                except (DoesNotExist, Exception):
+                    sample_lot_id = ObjectId(sample_lot_data['sample_lot_id'])
+                    sample_lot_doc = sample_lots_collection.find_one({'_id': sample_lot_id})
+                    if not sample_lot_doc:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': f'Sample lot with ID {sample_lot_data["sample_lot_id"]} not found in sample_lots[{i}]'
+                        }, status=404)
+                except Exception:
                     return JsonResponse({
                         'status': 'error',
-                        'message': f'Sample lot with ID {sample_lot_data["sample_lot_id"]} not found in sample_lots[{i}]'
-                    }, status=404)
+                        'message': f'Invalid sample lot ID format: {sample_lot_data["sample_lot_id"]} in sample_lots[{i}]'
+                    }, status=400)
                 
-                # Validate test method exists
+                # Validate test method exists using raw MongoDB query
                 try:
-                    test_method = TestMethod.objects.get(id=ObjectId(sample_lot_data['test_method_oid']))
-                except (DoesNotExist, Exception):
+                    test_method_id = ObjectId(sample_lot_data['test_method_oid'])
+                    test_methods_collection = db.test_methods
+                    test_method_doc = test_methods_collection.find_one({'_id': test_method_id})
+                    if not test_method_doc:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': f'Test method with ID {sample_lot_data["test_method_oid"]} not found in sample_lots[{i}]'
+                        }, status=404)
+                except Exception:
                     return JsonResponse({
                         'status': 'error',
-                        'message': f'Test method with ID {sample_lot_data["test_method_oid"]} not found in sample_lots[{i}]'
-                    }, status=404)
+                        'message': f'Invalid test method ID format: {sample_lot_data["test_method_oid"]} in sample_lots[{i}]'
+                    }, status=400)
                 
                 # Validate specimens exist
                 if not isinstance(sample_lot_data['specimen_oids'], list) or len(sample_lot_data['specimen_oids']) == 0:
@@ -255,15 +269,22 @@ def sample_preparation_list(request):
                     }, status=400)
                 
                 validated_specimen_oids = []
+                specimens_collection = db.specimens
                 for j, specimen_oid in enumerate(sample_lot_data['specimen_oids']):
                     try:
-                        specimen = Specimen.objects.get(id=ObjectId(specimen_oid))
-                        validated_specimen_oids.append(ObjectId(specimen_oid))
-                    except (DoesNotExist, Exception):
+                        specimen_id = ObjectId(specimen_oid)
+                        specimen_doc = specimens_collection.find_one({'_id': specimen_id})
+                        if not specimen_doc:
+                            return JsonResponse({
+                                'status': 'error',
+                                'message': f'Specimen with ID {specimen_oid} not found in sample_lots[{i}].specimen_oids[{j}]'
+                            }, status=404)
+                        validated_specimen_oids.append(specimen_id)
+                    except Exception:
                         return JsonResponse({
                             'status': 'error',
-                            'message': f'Specimen with ID {specimen_oid} not found in sample_lots[{i}].specimen_oids[{j}]'
-                        }, status=404)
+                            'message': f'Invalid specimen ID format: {specimen_oid} in sample_lots[{i}].specimen_oids[{j}]'
+                        }, status=400)
                 
                 # Create validated sample lot info
                 sample_lot_info = SampleLotInfo(
@@ -272,7 +293,7 @@ def sample_preparation_list(request):
                     dimension_spec=sample_lot_data.get('dimension_spec'),
                     request_by=sample_lot_data.get('request_by'),
                     remarks=sample_lot_data.get('remarks'),
-                    request_id=ObjectId(sample_lot_data['sample_lot_id']),  # Note: stored as sample_lot_id in MongoDB but field name is request_id
+                    sample_lot_id=ObjectId(sample_lot_data['sample_lot_id']),
                     test_method_oid=ObjectId(sample_lot_data['test_method_oid']),
                     specimen_oids=validated_specimen_oids
                 )
@@ -353,14 +374,14 @@ def sample_preparation_detail(request, object_id):
             for sample_lot in prep_doc.get('sample_lots', []):
                 # Get detailed sample lot information with job details
                 sample_lot_info = {
-                    'request_id': str(sample_lot.get('request_id', '')),
+                    'sample_lot_id': str(sample_lot.get('sample_lot_id', '')),
                     'item_no': 'Unknown',
                     'sample_type': 'Unknown',
                     'material_type': 'Unknown',
                     'job_id': 'Unknown'
                 }
                 try:
-                    sample_lot_obj = SampleLot.objects.get(id=ObjectId(sample_lot.get('request_id')))
+                    sample_lot_obj = SampleLot.objects.get(id=ObjectId(sample_lot.get('sample_lot_id')))
                     sample_lot_info.update({
                         'item_no': sample_lot_obj.item_no,
                         'sample_type': sample_lot_obj.sample_type,
@@ -425,7 +446,7 @@ def sample_preparation_detail(request, object_id):
                     'dimension_spec': sample_lot.get('dimension_spec'),
                     'request_by': sample_lot.get('request_by'),
                     'remarks': sample_lot.get('remarks'),
-                    'request_id': sample_lot_info['request_id'],
+                    'sample_lot_id': sample_lot_info['sample_lot_id'],
                     'test_method': test_method,
                     'job_id': sample_lot_info['job_id'],
                     'item_no': sample_lot_info['item_no'],
@@ -491,7 +512,7 @@ def sample_preparation_detail(request, object_id):
                     validated_sample_lots = []
                     for i, sample_lot_data in enumerate(sample_lots_data):
                         # Basic validation
-                        required_fields = ['item_description', 'request_id', 'test_method_oid', 'specimen_oids']
+                        required_fields = ['item_description', 'sample_lot_id', 'test_method_oid', 'specimen_oids']
                         for field in required_fields:
                             if field not in sample_lot_data:
                                 return JsonResponse({

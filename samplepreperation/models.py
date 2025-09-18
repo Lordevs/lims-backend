@@ -12,7 +12,7 @@ class SampleLotInfo(EmbeddedDocument):
     dimension_spec = fields.StringField(max_length=200)  # Dimension specifications or null
     request_by = fields.StringField(max_length=100)  # Can be null
     remarks = fields.StringField()  # Can be null
-    request_id = fields.ObjectIdField(required=True)  # Reference to SampleLot._id (stored as sample_lot_id in MongoDB)
+    sample_lot_id = fields.ObjectIdField(required=True)  # Reference to SampleLot._id
     test_method_oid = fields.ObjectIdField(required=True)  # Reference to TestMethod._id
     specimen_oids = fields.ListField(fields.ObjectIdField(), required=True)  # List of Specimen._id references
 
