@@ -58,9 +58,11 @@ def certificate_item_list(request):
                         'specimen_name': 'Unknown'
                     }
                     try:
-                        specimen = Specimen.objects.get(id=ObjectId(section.get('specimen_id')))
-                        specimen_info['specimen_name'] = specimen.specimen_id
-                    except (DoesNotExist, Exception):
+                        specimens_collection = db.specimens
+                        specimen_doc = specimens_collection.find_one({'_id': ObjectId(section.get('specimen_id'))})
+                        if specimen_doc:
+                            specimen_info['specimen_name'] = specimen_doc.get('specimen_id', 'Unknown')
+                    except Exception:
                         pass
                     
                     # Parse test results for summary
@@ -88,16 +90,17 @@ def certificate_item_list(request):
                 
                 # Get certificate information
                 certificate_info = {
-                    'certificate_id': item_doc.get('certificate_id', ''),
+                    'certificate_id': str(item_doc.get('certificate_id', '')),
                     'issue_date': 'Unknown',
                     'customers_name_no': 'Unknown'
                 }
                 try:
-                    # Try to find certificate by certificate_id
-                    db_certificates = db.certificates
-                    cert_doc = db_certificates.find_one({'certificate_id': item_doc.get('certificate_id')})
+                    # Try to find certificate by ObjectId
+                    db_certificates = db.complete_certificates
+                    cert_doc = db_certificates.find_one({'_id': item_doc.get('certificate_id')})
                     if cert_doc:
                         certificate_info.update({
+                            'certificate_id': cert_doc.get('certificate_id', 'Unknown'),
                             'issue_date': cert_doc.get('issue_date', 'Unknown'),
                             'customers_name_no': cert_doc.get('customers_name_no', 'Unknown')
                         })
@@ -106,13 +109,12 @@ def certificate_item_list(request):
                 
                 data.append({
                     'id': str(item_doc.get('_id', '')),
-                    'certificate_id': item_doc.get('certificate_id', ''),
+                    'certificate_id': str(item_doc.get('certificate_id', '')),
                     'certificate_info': certificate_info,
                     'sample_preparation_method': item_doc.get('sample_preparation_method', ''),
                     'material_grade': item_doc.get('material_grade', ''),
                     'temperature': item_doc.get('temperature', ''),
                     'humidity': item_doc.get('humidity', ''),
-                    'equipment_name': item_doc.get('equipment_name', ''),
                     'specimen_sections': specimen_sections_data,
                     'total_specimens': total_specimens,
                     'comments': item_doc.get('comments', ''),
@@ -148,21 +150,21 @@ def certificate_item_list(request):
                         'message': f'Required field "{field}" is missing or empty'
                     }, status=400)
             
-            # Validate certificate exists
-            certificate_id = data['certificate_id']
+            # Validate certificate exists using ObjectId
             try:
+                certificate_oid = ObjectId(data['certificate_id'])
                 db = connection.get_db()
-                certificates_collection = db.certificates
-                certificate_doc = certificates_collection.find_one({'certificate_id': certificate_id})
+                certificates_collection = db.complete_certificates
+                certificate_doc = certificates_collection.find_one({'_id': certificate_oid})
                 if not certificate_doc:
                     return JsonResponse({
                         'status': 'error',
-                        'message': f'Certificate with ID {certificate_id} not found'
+                        'message': f'Certificate with ID {data["certificate_id"]} not found'
                     }, status=404)
             except Exception as e:
                 return JsonResponse({
                     'status': 'error',
-                    'message': f'Error validating certificate: {str(e)}'
+                    'message': f'Invalid certificate ID format: {data["certificate_id"]}'
                 }, status=400)
             
             # Validate specimen_sections is an array
@@ -184,14 +186,21 @@ def certificate_item_list(request):
                             'message': f'Required field "{field}" is missing in specimen_sections[{i}]'
                         }, status=400)
                 
-                # Validate specimen exists
+                # Validate specimen exists using raw MongoDB query
                 try:
-                    specimen = Specimen.objects.get(id=ObjectId(section_data['specimen_id']))
-                except (DoesNotExist, Exception):
+                    specimen_oid = ObjectId(section_data['specimen_id'])
+                    specimens_collection = db.specimens
+                    specimen_doc = specimens_collection.find_one({'_id': specimen_oid})
+                    if not specimen_doc:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': f'Specimen with ID {section_data["specimen_id"]} not found in specimen_sections[{i}]'
+                        }, status=404)
+                except Exception:
                     return JsonResponse({
                         'status': 'error',
-                        'message': f'Specimen with ID {section_data["specimen_id"]} not found in specimen_sections[{i}]'
-                    }, status=404)
+                        'message': f'Invalid specimen ID format: {section_data["specimen_id"]} in specimen_sections[{i}]'
+                    }, status=400)
                 
                 # Validate test_results is valid JSON
                 try:
@@ -217,13 +226,15 @@ def certificate_item_list(request):
                 specimen_section = SpecimenSection(
                     test_results=section_data['test_results'],
                     images_list=images_list,
-                    specimen_id=ObjectId(section_data['specimen_id'])
+                    specimen_id=ObjectId(section_data['specimen_id']),
+                    equipment_name=section_data.get('equipment_name', ''),
+                    equipment_calibration=section_data.get('equipment_calibration', '')
                 )
                 validated_specimen_sections.append(specimen_section)
             
             # Create certificate item
             certificate_item = CertificateItem(
-                certificate_id=data['certificate_id'],
+                certificate_id=certificate_oid,
                 sample_preparation_method=data.get('sample_preparation_method', ''),
                 material_grade=data.get('material_grade', ''),
                 temperature=data.get('temperature', ''),
@@ -232,9 +243,7 @@ def certificate_item_list(request):
                 mtc_no=data.get('mtc_no', ''),
                 heat_no=data.get('heat_no', ''),
                 comments=data.get('comments', ''),
-                specimen_sections=validated_specimen_sections,
-                equipment_name=data.get('equipment_name', ''),
-                equipment_calibration=data.get('equipment_calibration', '')
+                specimen_sections=validated_specimen_sections
             )
             certificate_item.save()
             
@@ -243,7 +252,7 @@ def certificate_item_list(request):
                 'message': 'Certificate item created successfully',
                 'data': {
                     'id': str(certificate_item.id),
-                    'certificate_id': certificate_item.certificate_id,
+                    'certificate_id': str(certificate_item.certificate_id),
                     'specimen_sections_count': len(certificate_item.specimen_sections),
                     'material_grade': certificate_item.material_grade
                 }
@@ -307,9 +316,11 @@ def certificate_item_detail(request, item_id):
                     'specimen_name': 'Unknown'
                 }
                 try:
-                    specimen = Specimen.objects.get(id=ObjectId(section.get('specimen_id')))
-                    specimen_info['specimen_name'] = specimen.specimen_id
-                except (DoesNotExist, Exception):
+                    specimens_collection = db.specimens
+                    specimen_doc = specimens_collection.find_one({'_id': ObjectId(section.get('specimen_id'))})
+                    if specimen_doc:
+                        specimen_info['specimen_name'] = specimen_doc.get('specimen_id', 'Unknown')
+                except Exception:
                     pass
                 
                 # Parse and structure test results
@@ -330,22 +341,26 @@ def certificate_item_detail(request, item_id):
                     })
                 
                 specimen_sections_data.append({
+                    'specimen_id': str(section.get('specimen_id', '')),
                     'specimen_info': specimen_info,
                     'test_results': test_results_data,
-                    'images_list': images_data
+                    'test_results_summary': test_results_data,  # For compatibility
+                    'images_list': images_data,
+                    'equipment_name': section.get('equipment_name', ''),
+                    'equipment_calibration': section.get('equipment_calibration', '')
                 })
             
             # Get certificate information
             certificate_info = {
-                'certificate_id': item_doc.get('certificate_id', ''),
+                'certificate_id': str(item_doc.get('certificate_id', '')),
                 'issue_date': 'Unknown',
                 'customers_name_no': 'Unknown',
                 'date_of_sampling': 'Unknown',
                 'date_of_testing': 'Unknown'
             }
             try:
-                db_certificates = db.certificates
-                cert_doc = db_certificates.find_one({'certificate_id': item_doc.get('certificate_id')})
+                db_certificates = db.complete_certificates
+                cert_doc = db_certificates.find_one({'_id': item_doc.get('certificate_id')})
                 if cert_doc:
                     certificate_info.update({
                         'issue_date': cert_doc.get('issue_date', 'Unknown'),
@@ -360,7 +375,7 @@ def certificate_item_detail(request, item_id):
                 'status': 'success',
                 'data': {
                     'id': str(item_doc.get('_id', '')),
-                    'certificate_id': item_doc.get('certificate_id', ''),
+                    'certificate_id': str(item_doc.get('certificate_id', '')),
                     'certificate_info': certificate_info,
                     'sample_preparation_method': item_doc.get('sample_preparation_method', ''),
                     'material_grade': item_doc.get('material_grade', ''),
@@ -371,8 +386,6 @@ def certificate_item_detail(request, item_id):
                     'heat_no': item_doc.get('heat_no', ''),
                     'comments': item_doc.get('comments', ''),
                     'specimen_sections': specimen_sections_data,
-                    'equipment_name': item_doc.get('equipment_name', ''),
-                    'equipment_calibration': item_doc.get('equipment_calibration', ''),
                     'total_specimens': len(specimen_sections_data),
                     'created_at': item_doc.get('created_at').isoformat() if item_doc.get('created_at') else '',
                     'updated_at': item_doc.get('updated_at').isoformat() if item_doc.get('updated_at') else ''
@@ -388,8 +401,7 @@ def certificate_item_detail(request, item_id):
                 # Update basic fields if provided
                 updateable_fields = [
                     'sample_preparation_method', 'material_grade', 'temperature', 
-                    'humidity', 'po', 'mtc_no', 'heat_no', 'comments',
-                    'equipment_name', 'equipment_calibration'
+                    'humidity', 'po', 'mtc_no', 'heat_no', 'comments'
                 ]
                 for field in updateable_fields:
                     if field in data:
@@ -399,8 +411,8 @@ def certificate_item_detail(request, item_id):
                 if 'certificate_id' in data:
                     new_certificate_id = data['certificate_id']
                     try:
-                        db_certificates = db.certificates
-                        certificate_doc = db_certificates.find_one({'certificate_id': new_certificate_id})
+                        db_certificates = db.complete_certificates
+                        certificate_doc = db_certificates.find_one({'_id': ObjectId(new_certificate_id)})
                         if not certificate_doc:
                             return JsonResponse({
                                 'status': 'error',
@@ -499,18 +511,21 @@ def certificate_item_search(request):
         # Get query parameters
         certificate_id_query = request.GET.get('certificate_id', '')
         material_grade_query = request.GET.get('material_grade', '')
-        equipment_name_query = request.GET.get('equipment_name', '')
         specimen_id_query = request.GET.get('specimen_id', '')
         
         # Build query for raw MongoDB
         query = {'is_active': True}
         
         if certificate_id_query:
-            query['certificate_id'] = certificate_id_query
+            try:
+                query['certificate_id'] = ObjectId(certificate_id_query)
+            except Exception:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Invalid certificate ID format: {certificate_id_query}'
+                }, status=400)
         if material_grade_query:
             query['material_grade'] = {'$regex': material_grade_query, '$options': 'i'}
-        if equipment_name_query:
-            query['equipment_name'] = {'$regex': equipment_name_query, '$options': 'i'}
         if specimen_id_query:
             try:
                 query['specimen_sections.specimen_id'] = ObjectId(specimen_id_query)
@@ -532,9 +547,8 @@ def certificate_item_search(request):
             
             data.append({
                 'id': str(item_doc.get('_id', '')),
-                'certificate_id': item_doc.get('certificate_id', ''),
+                'certificate_id': str(item_doc.get('certificate_id', '')),
                 'material_grade': item_doc.get('material_grade', ''),
-                'equipment_name': item_doc.get('equipment_name', ''),
                 'specimen_count': specimen_count,
                 'created_at': item_doc.get('created_at').isoformat() if item_doc.get('created_at') else ''
             })
@@ -546,7 +560,6 @@ def certificate_item_search(request):
             'filters_applied': {
                 'certificate_id': certificate_id_query,
                 'material_grade': material_grade_query,
-                'equipment_name': equipment_name_query,
                 'specimen_id': specimen_id_query
             }
         })
@@ -584,9 +597,8 @@ def certificate_item_by_certificate(request, certificate_id):
             
             data.append({
                 'id': str(item_doc.get('_id', '')),
-                'certificate_id': item_doc.get('certificate_id', ''),
+                'certificate_id': str(item_doc.get('certificate_id', '')),
                 'material_grade': item_doc.get('material_grade', ''),
-                'equipment_name': item_doc.get('equipment_name', ''),
                 'specimen_count': specimen_count,
                 'images_count': total_images,
                 'comments': item_doc.get('comments', ''),

@@ -19,6 +19,8 @@ class SpecimenSection(EmbeddedDocument):
     test_results = fields.StringField(required=True)  # JSON string containing test data
     images_list = fields.ListField(fields.EmbeddedDocumentField(ImageInfo))
     specimen_id = fields.ObjectIdField(required=True)  # Reference to Specimen._id
+    equipment_name = fields.StringField(max_length=200)  # Equipment used for testing
+    equipment_calibration = fields.StringField(max_length=100)  # Equipment calibration info
 
 
 class CertificateItem(Document):
@@ -27,7 +29,7 @@ class CertificateItem(Document):
     Links Certificates with Specimens and contains detailed testing data
     Each certificate can have multiple items for different tests/specimens
     """
-    certificate_id = fields.StringField(max_length=100, required=True)  # Can be duplicated
+    certificate_id = fields.ObjectIdField(required=True)  # Reference to Certificate._id
     sample_preparation_method = fields.StringField(max_length=200)
     material_grade = fields.StringField(max_length=200)
     temperature = fields.StringField(max_length=50)
@@ -37,8 +39,6 @@ class CertificateItem(Document):
     heat_no = fields.StringField(max_length=100)  # Heat Number
     comments = fields.StringField()
     specimen_sections = fields.ListField(fields.EmbeddedDocumentField(SpecimenSection), required=True)
-    equipment_name = fields.StringField(max_length=200)
-    equipment_calibration = fields.StringField(max_length=100)
     
     # Audit fields
     created_at = fields.DateTimeField(default=datetime.now)

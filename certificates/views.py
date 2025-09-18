@@ -172,8 +172,57 @@ def certificate_list(request):
         try:
             data = json.loads(request.body)
             
-            # Validate required fields
-            required_fields = ['certificate_id', 'request_id']
+            # Get database connection
+            db = connection.get_db()
+            
+            # Auto-generate certificate_id if not provided
+            if 'certificate_id' not in data or not data['certificate_id']:
+                # Generate certificate_id automatically
+                current_year = datetime.now().year
+                year_prefix = f"CERT-{current_year}-"
+                
+                # Find the latest certificate_id for current year
+                certificates_collection = db.complete_certificates
+                
+                # Query for certificates from current year, sorted by certificate_id descending
+                latest_certificate = certificates_collection.find(
+                    {'certificate_id': {'$regex': f'^{year_prefix}', '$options': 'i'}}
+                ).sort('certificate_id', -1).limit(1)
+                
+                latest_certificate_list = list(latest_certificate)
+                
+                if latest_certificate_list:
+                    # Extract sequence number from latest certificate
+                    latest_certificate_id = latest_certificate_list[0]['certificate_id']
+                    try:
+                        # Extract the sequence number (last 4 digits)
+                        sequence_part = latest_certificate_id.split('-')[-1]
+                        next_sequence = int(sequence_part) + 1
+                    except (ValueError, IndexError):
+                        # If parsing fails, start from 1
+                        next_sequence = 1
+                else:
+                    # No previous certificates for this year, start from 1
+                    next_sequence = 1
+                
+                # Format sequence number with leading zeros (4 digits)
+                formatted_sequence = str(next_sequence).zfill(4)
+                generated_certificate_id = f"{year_prefix}{formatted_sequence}"
+                
+                # Check if generated certificate_id already exists (safety check)
+                existing_check = certificates_collection.find_one({'certificate_id': generated_certificate_id})
+                if existing_check:
+                    # If somehow it exists, increment until we find available one
+                    while existing_check:
+                        next_sequence += 1
+                        formatted_sequence = str(next_sequence).zfill(4)
+                        generated_certificate_id = f"{year_prefix}{formatted_sequence}"
+                        existing_check = certificates_collection.find_one({'certificate_id': generated_certificate_id})
+                
+                data['certificate_id'] = generated_certificate_id
+            
+            # Validate required fields (certificate_id is now auto-generated if not provided)
+            required_fields = ['request_id']
             for field in required_fields:
                 if field not in data or not data[field]:
                     return JsonResponse({
@@ -181,14 +230,21 @@ def certificate_list(request):
                         'message': f'Required field "{field}" is missing or empty'
                     }, status=400)
             
-            # Validate that the sample preparation request exists
+            # Validate that the sample preparation request exists using raw MongoDB query
             try:
-                sample_prep = SamplePreparation.objects.get(id=ObjectId(data['request_id']))
-            except (DoesNotExist, Exception):
+                request_id = ObjectId(data['request_id'])
+                sample_prep_collection = db.sample_preparations
+                sample_prep_doc = sample_prep_collection.find_one({'_id': request_id})
+                if not sample_prep_doc:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f'Sample preparation request with ID {data["request_id"]} not found'
+                    }, status=404)
+            except Exception as e:
                 return JsonResponse({
                     'status': 'error',
-                    'message': f'Sample preparation request with ID {data["request_id"]} not found'
-                }, status=404)
+                    'message': f'Invalid sample preparation request ID format: {data["request_id"]}'
+                }, status=400)
             
             certificate = Certificate(
                 certificate_id=data['certificate_id'],
@@ -211,7 +267,7 @@ def certificate_list(request):
                 'data': {
                     'id': str(certificate.id),
                     'certificate_id': certificate.certificate_id,
-                    'request_no': sample_prep.request_no,
+                    'request_no': sample_prep_doc.get('request_no', 'Unknown'),
                     'customers_name_no': certificate.customers_name_no
                 }
             }, status=201)
