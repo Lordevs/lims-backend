@@ -111,7 +111,46 @@ def job_list(request):
     elif request.method == 'POST':
         try:
             data = json.loads(request.body)
-            
+
+            # Auto-generate job_id if not provided
+            if 'job_id' not in data or not data['job_id']:
+                current_year = datetime.now().year
+                year_prefix = f"MTL-{current_year}-"
+                
+                from mongoengine import connection
+                db = connection.get_db()
+                jobs_collection = db.jobs
+
+                # Query for jobs from current year, sorted by job_id descending
+                latest_job = jobs_collection.find(
+                    {'job_id': {'$regex': f'^{year_prefix}', '$options': 'i'}}
+                ).sort('job_id', -1).limit(1)
+                latest_job_list = list(latest_job)
+
+                if latest_job_list:
+                    latest_job_id = latest_job_list[0]['job_id']
+                    try:
+                        sequence_part = latest_job_id.split('-')[-1]
+                        next_sequence = int(sequence_part) + 1
+                    except (ValueError, IndexError):
+                        next_sequence = 1
+                else:
+                    next_sequence = 1
+
+                formatted_sequence = str(next_sequence).zfill(4)
+                generated_job_id = f"{year_prefix}{formatted_sequence}"
+
+                # Check if generated job_id already exists (safety check)
+                existing_check = jobs_collection.find_one({'job_id': generated_job_id})
+                if existing_check:
+                    while existing_check:
+                        next_sequence += 1
+                        formatted_sequence = str(next_sequence).zfill(4)
+                        generated_job_id = f"{year_prefix}{formatted_sequence}"
+                        existing_check = jobs_collection.find_one({'job_id': generated_job_id})
+
+                data['job_id'] = generated_job_id
+
             # Validate required fields
             required_fields = ['job_id', 'client_id', 'project_name', 'receive_date', 'received_by']
             for field in required_fields:
@@ -120,7 +159,7 @@ def job_list(request):
                         'status': 'error',
                         'message': f'Required field "{field}" is missing or empty'
                     }, status=400)
-            
+
             # Verify client exists
             try:
                 client = Client.objects.get(id=ObjectId(data['client_id']))
@@ -129,7 +168,7 @@ def job_list(request):
                     'status': 'error',
                     'message': f'Client not found: {str(e)}'
                 }, status=400)
-            
+
             # Parse receive_date
             try:
                 receive_date = datetime.fromisoformat(data['receive_date'].replace('Z', '+00:00'))
@@ -138,7 +177,7 @@ def job_list(request):
                     'status': 'error',
                     'message': 'Invalid receive_date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)'
                 }, status=400)
-            
+
             job = Job(
                 job_id=data['job_id'],
                 client_id=ObjectId(data['client_id']),
@@ -149,7 +188,7 @@ def job_list(request):
                 remarks=data.get('remarks', '')
             )
             job.save()
-            
+
             return JsonResponse({
                 'status': 'success',
                 'message': 'Job created successfully',
@@ -160,7 +199,7 @@ def job_list(request):
                     'client_name': client.client_name
                 }
             }, status=201)
-            
+
         except ValidationError as e:
             return JsonResponse({
                 'status': 'error',

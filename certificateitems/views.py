@@ -31,8 +31,9 @@ def certificate_item_list(request):
             certificate_items_collection = db.certificate_items
             
             # Apply filters if provided
-            query = {'is_active': True}
-            
+            # query = {'is_active': True}
+            query = {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
+
             # Filter by certificate_id if provided
             certificate_id = request.GET.get('certificate_id')
             if certificate_id:
@@ -292,7 +293,7 @@ def certificate_item_detail(request, item_id):
         try:
             item_doc = certificate_items_collection.find_one({
                 '_id': ObjectId(item_id),
-                'is_active': True
+                # 'is_active': True
             })
         except Exception:
             return JsonResponse({
@@ -366,7 +367,8 @@ def certificate_item_detail(request, item_id):
                         'issue_date': cert_doc.get('issue_date', 'Unknown'),
                         'customers_name_no': cert_doc.get('customers_name_no', 'Unknown'),
                         'date_of_sampling': cert_doc.get('date_of_sampling', 'Unknown'),
-                        'date_of_testing': cert_doc.get('date_of_testing', 'Unknown')
+                        'date_of_testing': cert_doc.get('date_of_testing', 'Unknown'),
+                        'certificate_id': cert_doc.get('certificate_id', 'Unknown')
                     })
             except Exception:
                 pass
@@ -514,7 +516,8 @@ def certificate_item_search(request):
         specimen_id_query = request.GET.get('specimen_id', '')
         
         # Build query for raw MongoDB
-        query = {'is_active': True}
+        # query = {'is_active': True}
+        query = {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
         
         if certificate_id_query:
             try:
@@ -582,12 +585,27 @@ def certificate_item_by_certificate(request, certificate_id):
         db = connection.get_db()
         certificate_items_collection = db.certificate_items
         
+        # query = {
+        #     'certificate_id': certificate_id,
+        #     #'is_active': True
+        # }
+
+        # Find the certificate by its string code
+        db_certificates = db.complete_certificates
+        cert_doc = db_certificates.find_one({'certificate_id': certificate_id})
+        if not cert_doc:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Certificate with code {certificate_id} not found'
+            }, status=404)
+
         query = {
-            'certificate_id': certificate_id,
-            'is_active': True
+            'certificate_id': cert_doc['_id'],
+            # 'is_active': True
         }
         
-        certificate_items = certificate_items_collection.find(query).sort('created_at', -1)
+        certificate_items = certificate_items_collection.find(query)    #.sort('created_at', -1)
+        print(certificate_items)
         data = []
         
         for item_doc in certificate_items:
@@ -630,11 +648,11 @@ def certificate_item_stats(request):
         db = connection.get_db()
         certificate_items_collection = db.certificate_items
         
-        total_items = certificate_items_collection.count_documents({'is_active': True})
+        total_items = certificate_items_collection.count_documents({'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]})  #{'is_active': True}
         
         # Calculate statistics using aggregation
         pipeline = [
-            {'$match': {'is_active': True}},
+            {'$match': {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}},
             {
                 '$project': {
                     'certificate_id': 1,

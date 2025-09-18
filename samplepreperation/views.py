@@ -404,8 +404,14 @@ def sample_preparation_detail(request, object_id):
                     'test_name': 'Unknown Method'
                 }
                 try:
-                    test_method_obj = TestMethod.objects.get(id=ObjectId(sample_lot.get('test_method_oid')))
-                    test_method['test_name'] = test_method_obj.test_name
+                    # test_method_obj = TestMethod.objects.get(id=ObjectId(sample_lot.get('test_method_oid')))
+                    # test_method['test_name'] = test_method_obj.test_name
+                    test_methods_collection = db.test_methods
+                    test_method_obj = test_methods_collection.find_one({'_id': ObjectId(sample_lot.get('test_method_oid'))})
+                    if test_method_obj:
+                        test_method.update({
+                            'test_name': test_method_obj.get('test_name', 'Unknown Method')
+                        })
                 except (DoesNotExist, Exception):
                     pass
                 
@@ -416,13 +422,22 @@ def sample_preparation_detail(request, object_id):
                     'test_description': 'Unknown'
                 }
                 try:
-                    test_method_obj = TestMethod.objects.get(id=ObjectId(sample_lot.get('test_method_oid')))
-                    test_method_info.update({
-                        'test_name': test_method_obj.test_name,
-                        'test_description': test_method_obj.test_description,
-                        'test_columns': test_method_obj.test_columns,
-                        'hasImage': test_method_obj.hasImage
-                    })
+                    # test_method_obj = TestMethod.objects.get(id=ObjectId(sample_lot.get('test_method_oid')))
+                    # test_method_info.update({
+                    #     'test_name': test_method_obj.test_name,
+                    #     'test_description': test_method_obj.test_description,
+                    #     'test_columns': test_method_obj.test_columns,
+                    #     'hasImage': test_method_obj.hasImage
+                    # })
+                    test_methods_collection = db.test_methods
+                    test_method_obj = test_methods_collection.find_one({'_id': ObjectId(sample_lot.get('test_method_oid'))})
+                    if test_method_obj:
+                        test_method_info.update({
+                            'test_name': test_method_obj.get('test_name', 'Unknown Method'),
+                            'test_description': test_method_obj.get('test_description', 'Unknown'),
+                            'test_columns': test_method_obj.get('test_columns', []),
+                            'hasImage': test_method_obj.get('hasImage', False)
+                        })
                 except (DoesNotExist, Exception):
                     pass
                 
