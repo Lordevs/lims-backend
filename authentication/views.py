@@ -32,7 +32,7 @@ def login(request):
         data = json.loads(request.body)
         
         # Validate required fields
-        required_fields = ['username', 'password']
+        required_fields = ['email', 'password']
         for field in required_fields:
             if field not in data or not data[field]:
                 return JsonResponse({
@@ -40,26 +40,23 @@ def login(request):
                     'message': f'Required field "{field}" is missing or empty'
                 }, status=400)
         
-        username = data['username']
+        email = data['email']
         password = data['password']
         
-        # Find user by username or email
+        # Find user by email
         try:
-            user = User.objects.get(username=username, is_active=True)
+            user = User.objects.get(email=email, is_active=True)
         except User.DoesNotExist:
-            try:
-                user = User.objects.get(email=username, is_active=True)
-            except User.DoesNotExist:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Invalid username/email or password'
-                }, status=401)
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid email or password'
+            }, status=401)
         
         # Check password
         if not user.check_password(password):
             return JsonResponse({
                 'status': 'error',
-                'message': 'Invalid username/email or password'
+                'message': 'Invalid email or password'
             }, status=401)
         
         # Check if user is verified
@@ -126,7 +123,7 @@ def register(request):
         data = json.loads(request.body)
         
         # Validate required fields
-        required_fields = ['username', 'email', 'password', 'first_name', 'last_name', 'role']
+        required_fields = ['email', 'password', 'role']
         for field in required_fields:
             if field not in data or not data[field]:
                 return JsonResponse({
@@ -150,13 +147,6 @@ def register(request):
                 'message': 'Password must be at least 8 characters long'
             }, status=400)
         
-        # Check if username already exists
-        if User.objects(username=data['username']).count() > 0:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Username already exists'
-            }, status=400)
-        
         # Check if email already exists
         if User.objects(email=data['email']).count() > 0:
             return JsonResponse({
@@ -164,12 +154,23 @@ def register(request):
                 'message': 'Email already exists'
             }, status=400)
         
+        # Generate username from email (part before @)
+        email_username = data['email'].split('@')[0]
+        
+        # Ensure username is unique by appending numbers if needed
+        base_username = email_username
+        username = base_username
+        counter = 1
+        while User.objects(username=username).count() > 0:
+            username = f"{base_username}{counter}"
+            counter += 1
+        
         # Create new user
         user = User(
-            username=data['username'],
+            username=username,
             email=data['email'],
-            first_name=data['first_name'],
-            last_name=data['last_name'],
+            first_name=data.get('first_name', ''),
+            last_name=data.get('last_name', ''),
             role=data['role'],
             is_active=True,
             is_verified=True  # Auto-verify for now, can be changed to require email verification
