@@ -9,6 +9,7 @@ from mongoengine import connection
 from mongoengine.errors import DoesNotExist, ValidationError
 
 from .models import TestMethod
+from authentication.decorators import any_authenticated_user
 
 
 def safe_datetime_format(dt_value):
@@ -34,6 +35,7 @@ def safe_datetime_format(dt_value):
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
+@any_authenticated_user
 def test_method_list(request):
     """
     List all test methods or create a new test method
@@ -119,6 +121,7 @@ def test_method_list(request):
             }, status=400)
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
+@any_authenticated_user
 def test_method_detail(request, test_method_id):
     """
     Get, update, or delete a specific test method by ObjectId
@@ -239,6 +242,7 @@ def test_method_detail(request, test_method_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def test_method_search(request):
     """
     Search test methods by various criteria
@@ -298,6 +302,7 @@ def test_method_search(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def test_method_stats(request):
     """
     Get test method statistics

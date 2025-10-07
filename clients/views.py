@@ -6,10 +6,12 @@ import json
 from datetime import datetime
 from .models import Client
 from mongoengine.errors import DoesNotExist, ValidationError
+from authentication.decorators import any_authenticated_user
 
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
+@any_authenticated_user
 def client_list(request):
     """
     List all clients or create a new client
@@ -111,6 +113,7 @@ def client_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
+@any_authenticated_user
 def client_detail(request, object_id):
     """
     Get, update, or delete a specific client by ObjectId

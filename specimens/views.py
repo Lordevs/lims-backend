@@ -9,12 +9,14 @@ from mongoengine import connection
 from mongoengine.errors import DoesNotExist, ValidationError, NotUniqueError
 
 from .models import Specimen
+from authentication.decorators import any_authenticated_user
 
 
 # ============= SPECIMEN CRUD ENDPOINTS =============
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
+@any_authenticated_user
 def specimen_list(request):
     """
     List all specimens or create a new specimen
@@ -110,6 +112,7 @@ def specimen_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
+@any_authenticated_user
 def specimen_detail(request, object_id):
     """
     Get, update, or delete a specific specimen by ObjectId
@@ -259,6 +262,7 @@ def specimen_detail(request, object_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def specimen_search(request):
     """
     Search specimens by specimen_id (partial match)
@@ -306,6 +310,7 @@ def specimen_search(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def specimen_stats(request):
     """
     Get specimen statistics
@@ -333,6 +338,7 @@ def specimen_stats(request):
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
+@any_authenticated_user
 def bulk_delete_specimens(request):
     """
     Bulk delete multiple specimens

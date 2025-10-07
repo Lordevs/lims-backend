@@ -13,12 +13,14 @@ from samplelots.models import SampleLot
 from samplejobs.models import Job
 from testmethods.models import TestMethod
 from specimens.models import Specimen
+from authentication.decorators import any_authenticated_user
 
 
 # ============= SAMPLE PREPARATION CRUD ENDPOINTS =============
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
+@any_authenticated_user
 def sample_preparation_list(request):
     """
     List all sample preparations or create a new sample preparation
@@ -340,6 +342,7 @@ def sample_preparation_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
+@any_authenticated_user
 def sample_preparation_detail(request, object_id):
     """
     Get, update, or delete a specific sample preparation by ObjectId
@@ -606,6 +609,7 @@ def sample_preparation_detail(request, object_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def sample_preparation_search(request):
     """
     Search sample preparations by various criteria
@@ -663,6 +667,7 @@ def sample_preparation_search(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def sample_preparation_stats(request):
     """
     Get sample preparation statistics

@@ -9,6 +9,7 @@ from .models import Job
 from clients.models import Client  # Import Client model from clients app
 from mongoengine.errors import DoesNotExist, ValidationError
 from mongoengine import connection
+from authentication.decorators import any_authenticated_user
 
 
 # ============= UTILITY FUNCTIONS =============
@@ -56,6 +57,7 @@ def cascade_delete_job_relations(job_object_id, db):
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
+@any_authenticated_user
 def job_list(request):
     """
     List all jobs or create a new job
@@ -219,6 +221,7 @@ def job_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
+@any_authenticated_user
 def job_detail(request, object_id):
     """
     Get, update, or delete a specific job by ObjectId
@@ -429,6 +432,7 @@ def job_detail(request, object_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def job_search(request):
     """
     Search jobs by various criteria
@@ -505,6 +509,7 @@ def job_search(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def job_stats(request):
     """
     Get job statistics
@@ -533,6 +538,7 @@ def job_stats(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def job_by_client(request, object_id):
     """
     Get all jobs for a specific client
@@ -594,6 +600,7 @@ def job_by_client(request, object_id):
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
+@any_authenticated_user
 def bulk_delete_jobs(request):
     """
     Bulk delete multiple jobs with cascading delete

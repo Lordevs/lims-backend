@@ -10,12 +10,14 @@ from mongoengine.errors import DoesNotExist, ValidationError, NotUniqueError
 
 from .models import Certificate
 from samplepreperation.models import SamplePreparation
+from authentication.decorators import any_authenticated_user
 
 
 # ============= CERTIFICATE CRUD ENDPOINTS =============
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
+@any_authenticated_user
 def certificate_list(request):
     """
     List all certificates or create a new certificate
@@ -296,6 +298,7 @@ def certificate_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
+@any_authenticated_user
 def certificate_detail(request, certificate_id):
     """
     Get, update, or delete a specific certificate by certificate_id
@@ -556,6 +559,7 @@ def certificate_detail(request, certificate_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def certificate_search(request):
     """
     Search certificates by various criteria
@@ -638,6 +642,7 @@ def certificate_search(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def certificate_stats(request):
     """
     Get certificate statistics
@@ -693,6 +698,7 @@ def certificate_stats(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def certificate_by_request(request, request_no):
     """
     Get certificates for a specific sample preparation request

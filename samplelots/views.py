@@ -11,12 +11,14 @@ from mongoengine.errors import DoesNotExist, ValidationError
 from .models import SampleLot
 from samplejobs.models import Job
 from testmethods.models import TestMethod
+from authentication.decorators import any_authenticated_user
 
 
 # ============= SAMPLE LOT CRUD ENDPOINTS =============
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
+@any_authenticated_user
 def sample_lot_list(request):
     """
     List all sample lots or create a new sample lot
@@ -197,6 +199,7 @@ def sample_lot_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
+@any_authenticated_user
 def sample_lot_detail(request, sample_lot_id):
     """
     Get, update, or delete a specific sample lot by ObjectId
@@ -416,6 +419,7 @@ def sample_lot_detail(request, sample_lot_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def sample_lot_search(request):
     """
     Search sample lots by various criteria
@@ -500,6 +504,7 @@ def sample_lot_search(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def sample_lot_stats(request):
     """
     Get sample lot statistics
@@ -544,6 +549,7 @@ def sample_lot_stats(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def sample_lot_by_job(request, job_id):
     """
     Get all sample lots for a specific job

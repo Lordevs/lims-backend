@@ -12,12 +12,14 @@ from .models import CertificateItem, SpecimenSection, ImageInfo
 from certificates.models import Certificate
 from specimens.models import Specimen
 from samplepreperation.models import SamplePreparation
+from authentication.decorators import any_authenticated_user
 
 
 # ============= CERTIFICATE ITEMS CRUD ENDPOINTS =============
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
+@any_authenticated_user
 def certificate_item_list(request):
     """
     List all certificate items or create a new certificate item
@@ -278,6 +280,7 @@ def certificate_item_list(request):
 
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
+@any_authenticated_user
 def certificate_item_detail(request, item_id):
     """
     Get, update, or delete a specific certificate item by ID
@@ -500,6 +503,7 @@ def certificate_item_detail(request, item_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def certificate_item_search(request):
     """
     Search certificate items by various criteria
@@ -576,6 +580,7 @@ def certificate_item_search(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def certificate_item_by_certificate(request, certificate_id):
     """
     Get all certificate items for a specific certificate
@@ -639,6 +644,7 @@ def certificate_item_by_certificate(request, certificate_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@any_authenticated_user
 def certificate_item_stats(request):
     """
     Get certificate item statistics
