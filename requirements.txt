@@ -1,6 +1,7 @@
 asgiref==3.9.1
 dataclasses==0.6
 Django==5.2.6
+django-cors-headers==4.9.0
 dnspython==2.8.0
 mongoengine==0.29.1
 pymongo==4.15.0

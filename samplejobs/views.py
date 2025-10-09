@@ -10,6 +10,7 @@ from clients.models import Client  # Import Client model from clients app
 from mongoengine.errors import DoesNotExist, ValidationError
 from mongoengine import connection
 from authentication.decorators import any_authenticated_user
+from lims_backend.utilities.pagination import get_pagination_params, create_pagination_response, paginate_queryset
 
 
 # ============= UTILITY FUNCTIONS =============
@@ -66,12 +67,19 @@ def job_list(request):
     """
     if request.method == 'GET':
         try:
+            # Get pagination parameters
+            page, limit, offset = get_pagination_params(request)
+            
             # Use raw query to avoid field validation issues with existing data
             from mongoengine import connection
             db = connection.get_db()
             jobs_collection = db.jobs
             
-            jobs = jobs_collection.find({})
+            # Get total count for pagination
+            total_records = jobs_collection.count_documents({})
+            
+            # Get paginated jobs
+            jobs = jobs_collection.find({}).skip(offset).limit(limit).sort('created_at', -1)
             data = []
             
             for job_doc in jobs:
@@ -82,6 +90,17 @@ def job_list(request):
                     client_name = client.client_name
                 except (DoesNotExist, Exception):
                     pass
+                
+                # Get sample lots count for this job
+                sample_lots_count = 0
+                try:
+                    sample_lots_collection = db.sample_lots
+                    sample_lots_count = sample_lots_collection.count_documents({
+                        'job_id': job_doc.get('_id'),
+                        '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]
+                    })
+                except Exception:
+                    sample_lots_count = 0
                 
                 # Only access fields that exist in our current model
                 data.append({
@@ -94,15 +113,18 @@ def job_list(request):
                     'receive_date': job_doc.get('receive_date').isoformat() if job_doc.get('receive_date') else '',
                     'received_by': job_doc.get('received_by', ''),
                     'remarks': job_doc.get('remarks', ''),
+                    'sample_lots_count': sample_lots_count,
                     'job_created_at': job_doc.get('job_created_at').isoformat() if job_doc.get('job_created_at') else '',
                     'created_at': job_doc.get('created_at').isoformat() if job_doc.get('created_at') else '',
                     'updated_at': job_doc.get('updated_at').isoformat() if job_doc.get('updated_at') else ''
                 })
             
+            # Create paginated response
+            response_data = create_pagination_response(data, total_records, page, limit)
+            
             return JsonResponse({
                 'status': 'success',
-                'data': data,
-                'total': len(data)
+                **response_data
             })
         except Exception as e:
             return JsonResponse({
@@ -268,6 +290,17 @@ def job_detail(request, object_id):
             except DoesNotExist:
                 pass
             
+            # Get sample lots count for this job
+            sample_lots_count = 0
+            try:
+                sample_lots_collection = db.sample_lots
+                sample_lots_count = sample_lots_collection.count_documents({
+                    'job_id': job_doc.get('_id'),
+                    '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]
+                })
+            except Exception:
+                sample_lots_count = 0
+            
             return JsonResponse({
                 'status': 'success',
                 'data': {
@@ -280,6 +313,7 @@ def job_detail(request, object_id):
                     'receive_date': job_doc.get('receive_date').isoformat() if job_doc.get('receive_date') else '',
                     'received_by': job_doc.get('received_by', ''),
                     'remarks': job_doc.get('remarks', ''),
+                    'sample_lots_count': sample_lots_count,
                     'job_created_at': job_doc.get('job_created_at').isoformat() if job_doc.get('job_created_at') else '',
                     'created_at': job_doc.get('created_at').isoformat() if job_doc.get('created_at') else '',
                     'updated_at': job_doc.get('updated_at').isoformat() if job_doc.get('updated_at') else ''

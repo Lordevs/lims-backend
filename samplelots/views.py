@@ -12,6 +12,7 @@ from .models import SampleLot
 from samplejobs.models import Job
 from testmethods.models import TestMethod
 from authentication.decorators import any_authenticated_user
+# Pagination removed from sample lots as requested
 
 
 # ============= SAMPLE LOT CRUD ENDPOINTS =============
@@ -33,7 +34,9 @@ def sample_lot_list(request):
             
             # Query to find active sample lots or documents without is_active field (legacy data)
             query = {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
-            sample_lots = sample_lots_collection.find(query)
+            
+            # Get all sample lots (no pagination)
+            sample_lots = sample_lots_collection.find(query).sort('created_at', -1)
             data = []
             
             for sample_lot_doc in sample_lots:
@@ -41,13 +44,43 @@ def sample_lot_list(request):
                 job_info = {}
                 try:
                     job = Job.objects.get(id=ObjectId(sample_lot_doc.get('job_id')))
+                    
+                    # Get client name from client_id
+                    client_name = ''
+                    try:
+                        from clients.models import Client
+                        client = Client.objects.get(id=ObjectId(job.client_id))
+                        client_name = client.client_name
+                    except (DoesNotExist, Exception):
+                        client_name = 'Unknown Client'
+                    
                     job_info = {
                         'job_id': job.job_id,
+                        'client_id': str(job.client_id),
+                        'client_name': client_name,
                         'project_name': job.project_name,
-                        'client_id': str(job.client_id)
+                        'end_user': job.end_user,
+                        'receive_date': job.receive_date.isoformat() if job.receive_date else '',
+                        'received_by': job.received_by,
+                        'remarks': job.remarks,
+                        'job_created_at': job.created_at.isoformat() if job.created_at else '',
+                        'created_at': job.created_at.isoformat() if job.created_at else '',
+                        'updated_at': job.updated_at.isoformat() if job.updated_at else ''
                     }
                 except (DoesNotExist, Exception):
-                    job_info = {'job_id': 'Unknown', 'project_name': 'Unknown', 'client_id': ''}
+                    job_info = {
+                        'job_id': 'Unknown', 
+                        'client_id': '',
+                        'client_name': 'Unknown',
+                        'project_name': 'Unknown',
+                        'end_user': '',
+                        'receive_date': '',
+                        'received_by': '',
+                        'remarks': '',
+                        'job_created_at': '',
+                        'created_at': '',
+                        'updated_at': ''
+                    }
                 
                 # Get test methods information (names and count)
                 test_method_oids = sample_lot_doc.get('test_method_oids', [])
@@ -564,6 +597,15 @@ def sample_lot_by_job(request, job_id):
                 'message': 'Job not found'
             }, status=404)
         
+        # Get client name from client_id
+        client_name = ''
+        try:
+            from clients.models import Client
+            client = Client.objects.get(id=ObjectId(job.client_id))
+            client_name = client.client_name
+        except (DoesNotExist, Exception):
+            client_name = 'Unknown Client'
+        
         # Use raw query to find sample lots by job (legacy data support)
         db = connection.get_db()
         sample_lots_collection = db.sample_lots
@@ -592,8 +634,16 @@ def sample_lot_by_job(request, job_id):
             'total': len(data),
             'job_info': {
                 'job_id': job.job_id,
+                'client_id': str(job.client_id),
+                'client_name': client_name,
                 'project_name': job.project_name,
-                'client_id': str(job.client_id)
+                'end_user': job.end_user,
+                'receive_date': job.receive_date.isoformat() if job.receive_date else '',
+                'received_by': job.received_by,
+                'remarks': job.remarks,
+                'job_created_at': job.created_at.isoformat() if job.created_at else '',
+                'created_at': job.created_at.isoformat() if job.created_at else '',
+                'updated_at': job.updated_at.isoformat() if job.updated_at else ''
             }
         })
         

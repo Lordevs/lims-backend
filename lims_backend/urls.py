@@ -28,4 +28,7 @@ urlpatterns = [
     path('api/sample-preparations/', include('samplepreperation.urls')),
     path('api/certificates/', include('certificates.urls')),
     path('api/certificate-items/', include('certificateitems.urls')),
+    path('api/equipment/', include('labequipment.urls')),
+    path('api/proficiency-tests/', include('proficiencytesting.urls')),
+    path('api/calibration-tests/', include('calibrationtesting.urls')),
 ]

@@ -30,7 +30,17 @@ SECRET_KEY = 'django-insecure-igwv3+0(xwh@s7wvvviq6(40#vy#x44x$)u1p4=d$03#94!4)7
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver',"192.168.1.2"]
+
+# CORS Configuration
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_ALL_ORIGINS = False  # Set to True only for development if needed
 
 
 # Application definition
@@ -42,6 +52,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'mongoengine',
     'authentication',
     'clients',
@@ -51,11 +62,15 @@ INSTALLED_APPS = [
     'testmethods',
     'samplelots',
     'samplepreperation',
-    'certificateitems'
+    'certificateitems',
+    'labequipment',
+    'proficiencytesting',
+    'calibrationtesting'
    
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

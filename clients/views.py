@@ -7,6 +7,7 @@ from datetime import datetime
 from .models import Client
 from mongoengine.errors import DoesNotExist, ValidationError
 from authentication.decorators import any_authenticated_user
+from lims_backend.utilities.pagination import get_pagination_params, create_pagination_response, paginate_queryset
 
 
 @csrf_exempt
@@ -20,12 +21,17 @@ def client_list(request):
     """
     if request.method == 'GET':
         try:
-            clients = Client.objects.all()
+            # Get pagination parameters
+            page, limit, offset = get_pagination_params(request)
+            
+            # Get clients with pagination
+            clients_queryset = Client.objects.all().order_by('-created_at')
+            paginated_clients, total_records = paginate_queryset(clients_queryset, page, limit)
+            
             data = []
-            for client in clients:
+            for client in paginated_clients:
                 data.append({
                     'id': str(client.id),
-                  
                     'client_name': client.client_name,
                     'company_name': client.company_name,
                     'email': client.email,
@@ -36,10 +42,13 @@ def client_list(request):
                     'created_at': client.created_at.isoformat(),
                     'updated_at': client.updated_at.isoformat()
                 })
+            
+            # Create paginated response
+            response_data = create_pagination_response(data, total_records, page, limit)
+            
             return JsonResponse({
                 'status': 'success',
-                'data': data,
-                'total': len(data)
+                **response_data
             })
         except Exception as e:
             return JsonResponse({
