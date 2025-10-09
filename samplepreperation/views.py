@@ -46,7 +46,9 @@ def sample_preparation_list(request):
                         'item_no': 'Unknown',
                         'sample_type': 'Unknown',
                         'material_type': 'Unknown',
-                        'job_id': 'Unknown'
+                        'job_id': 'Unknown',
+                        'client_name': 'Unknown',
+                        'project_name': 'Unknown'
                     }
                     
                     # Debug: Check if sample_lot_id exists and is valid
@@ -69,6 +71,15 @@ def sample_preparation_list(request):
                                 if hasattr(sample_lot_obj, 'job_id') and sample_lot_obj.job_id:
                                     job = Job.objects.get(id=sample_lot_obj.job_id)
                                     sample_lot_info['job_id'] = job.job_id
+                                    sample_lot_info['project_name'] = job.project_name
+                                    
+                                    # Get client name from job's client_id
+                                    try:
+                                        from clients.models import Client
+                                        client = Client.objects.get(id=ObjectId(job.client_id))
+                                        sample_lot_info['client_name'] = client.client_name
+                                    except (DoesNotExist, Exception):
+                                        sample_lot_info['client_name'] = 'Unknown Client'
                                 else:
                                     sample_lot_info['job_id'] = 'No Job ID'
                             except (DoesNotExist, Exception) as e:
@@ -128,6 +139,8 @@ def sample_preparation_list(request):
                         'test_method': test_method,
                         'job_id': sample_lot_info['job_id'],
                         'item_no': sample_lot_info['item_no'],
+                        'client_name': sample_lot_info['client_name'],
+                        'project_name': sample_lot_info['project_name'],
                         'specimens': specimens_info,
                         'specimens_count': len(specimens_info)
                     })
@@ -381,7 +394,9 @@ def sample_preparation_detail(request, object_id):
                     'item_no': 'Unknown',
                     'sample_type': 'Unknown',
                     'material_type': 'Unknown',
-                    'job_id': 'Unknown'
+                    'job_id': 'Unknown',
+                    'client_name': 'Unknown',
+                    'project_name': 'Unknown'
                 }
                 try:
                     sample_lot_obj = SampleLot.objects.get(id=ObjectId(sample_lot.get('sample_lot_id')))
@@ -395,6 +410,16 @@ def sample_preparation_detail(request, object_id):
                     try:
                         job = Job.objects.get(id=ObjectId(sample_lot_obj.job_id))
                         sample_lot_info['job_id'] = job.job_id
+                        sample_lot_info['project_name'] = job.project_name
+                        
+                        # Get client name from job's client_id
+                        try:
+                            from clients.models import Client
+                            client = Client.objects.get(id=ObjectId(job.client_id))
+                            sample_lot_info['client_name'] = client.client_name
+                        except (DoesNotExist, Exception):
+                            sample_lot_info['client_name'] = 'Unknown Client'
+                            
                     except (DoesNotExist, Exception):
                         sample_lot_info['job_id'] = 'Unknown'
                         
@@ -468,6 +493,8 @@ def sample_preparation_detail(request, object_id):
                     'test_method': test_method,
                     'job_id': sample_lot_info['job_id'],
                     'item_no': sample_lot_info['item_no'],
+                    'client_name': sample_lot_info['client_name'],
+                    'project_name': sample_lot_info['project_name'],
                     'sample_lot_info': sample_lot_info,
                     'test_method_info': test_method_info,
                     'specimens': specimens_info,

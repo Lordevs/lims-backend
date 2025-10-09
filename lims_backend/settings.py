@@ -172,5 +172,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # JWT Configuration
 JWT_SECRET_KEY = 'your-secret-key-change-in-production'
 JWT_ALGORITHM = 'HS256'
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
+ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 REFRESH_TOKEN_EXPIRE_DAYS = 7
