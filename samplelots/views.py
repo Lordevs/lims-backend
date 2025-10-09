@@ -583,6 +583,176 @@ def sample_lot_stats(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 @any_authenticated_user
+def sample_lot_stats_current_month(request):
+    """
+    Get sample lot statistics for the current month
+    """
+    try:
+        from datetime import datetime, timedelta
+        
+        db = connection.get_db()
+        sample_lots_collection = db.sample_lots
+        
+        # Get current month start and end dates
+        now = datetime.now()
+        current_month_start = datetime(now.year, now.month, 1)
+        
+        # Calculate next month start (end of current month)
+        if now.month == 12:
+            next_month_start = datetime(now.year + 1, 1, 1)
+        else:
+            next_month_start = datetime(now.year, now.month + 1, 1)
+        
+        # Base query for active sample lots
+        base_query = {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
+        
+        # Query for sample lots created in current month
+        current_month_query = {
+            **base_query,
+            'created_at': {
+                '$gte': current_month_start,
+                '$lt': next_month_start
+            }
+        }
+        
+        # Get current month statistics
+        current_month_sample_lots = sample_lots_collection.count_documents(current_month_query)
+        
+        # Get sample lots by week in current month
+        weekly_stats = []
+        current_date = current_month_start
+        
+        while current_date < next_month_start:
+            week_end = min(current_date + timedelta(days=7), next_month_start)
+            
+            week_query = {
+                **base_query,
+                'created_at': {
+                    '$gte': current_date,
+                    '$lt': week_end
+                }
+            }
+            
+            week_sample_lots = sample_lots_collection.count_documents(week_query)
+            
+            weekly_stats.append({
+                'week_start': current_date.strftime('%Y-%m-%d'),
+                'week_end': (week_end - timedelta(days=1)).strftime('%Y-%m-%d'),
+                'sample_lots_count': week_sample_lots
+            })
+            
+            current_date = week_end
+        
+        # Get sample lots by day in current month (last 7 days)
+        daily_stats = []
+        for i in range(7):
+            day_start = now - timedelta(days=i)
+            day_end = day_start + timedelta(days=1)
+            
+            day_query = {
+                **base_query,
+                'created_at': {
+                    '$gte': day_start,
+                    '$lt': day_end
+                }
+            }
+            
+            day_sample_lots = sample_lots_collection.count_documents(day_query)
+            
+            daily_stats.append({
+                'date': day_start.strftime('%Y-%m-%d'),
+                'sample_lots_count': day_sample_lots
+            })
+        
+        # Get sample type distribution for current month
+        sample_type_pipeline = [
+            {'$match': current_month_query},
+            {'$group': {'_id': '$sample_type', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}}
+        ]
+        
+        sample_type_stats = list(sample_lots_collection.aggregate(sample_type_pipeline))
+        
+        # Get material type distribution for current month
+        material_type_pipeline = [
+            {'$match': current_month_query},
+            {'$group': {'_id': '$material_type', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}}
+        ]
+        
+        material_type_stats = list(sample_lots_collection.aggregate(material_type_pipeline))
+        
+        # Get top jobs for current month (jobs with most sample lots)
+        job_pipeline = [
+            {'$match': current_month_query},
+            {'$group': {'_id': '$job_id', 'sample_lots_count': {'$sum': 1}}},
+            {'$sort': {'sample_lots_count': -1}},
+            {'$limit': 5}
+        ]
+        
+        top_jobs_raw = list(sample_lots_collection.aggregate(job_pipeline))
+        top_jobs = []
+        
+        for job_data in top_jobs_raw:
+            try:
+                from samplejobs.models import Job
+                job = Job.objects.get(id=ObjectId(job_data['_id']))
+                
+                # Get client name
+                client_name = 'Unknown Client'
+                try:
+                    from clients.models import Client
+                    client = Client.objects.get(id=ObjectId(job.client_id))
+                    client_name = client.client_name
+                except (DoesNotExist, Exception):
+                    pass
+                
+                top_jobs.append({
+                    'job_id': job.job_id,
+                    'project_name': job.project_name,
+                    'client_name': client_name,
+                    'sample_lots_count': job_data['sample_lots_count']
+                })
+            except (DoesNotExist, Exception):
+                top_jobs.append({
+                    'job_id': 'Unknown Job',
+                    'project_name': 'Unknown Project',
+                    'client_name': 'Unknown Client',
+                    'sample_lots_count': job_data['sample_lots_count']
+                })
+        
+        # Get total sample lots for comparison
+        total_sample_lots = sample_lots_collection.count_documents(base_query)
+        
+        return JsonResponse({
+            'status': 'success',
+            'data': {
+                'current_month': {
+                    'month': now.strftime('%Y-%m'),
+                    'month_name': now.strftime('%B %Y'),
+                    'sample_lots_count': current_month_sample_lots,
+                    'percentage_of_total': round((current_month_sample_lots / total_sample_lots * 100), 2) if total_sample_lots > 0 else 0
+                },
+                'weekly_breakdown': weekly_stats,
+                'daily_breakdown': daily_stats,
+                'sample_type_distribution': sample_type_stats,
+                'material_type_distribution': material_type_stats,
+                'top_jobs': top_jobs,
+                'total_sample_lots': total_sample_lots,
+                'generated_at': now.isoformat()
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@any_authenticated_user
 def sample_lot_by_job(request, job_id):
     """
     Get all sample lots for a specific job

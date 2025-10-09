@@ -10,6 +10,7 @@ urlpatterns = [
     # Additional endpoints - these must come BEFORE the detail endpoint
     path('search/', views.job_search, name='job_search'),               # GET: Search jobs
     path('stats/', views.job_stats, name='job_stats'),                 # GET: Job statistics
+    path('stats/current-month/', views.job_stats_current_month, name='job_stats_current_month'), # GET: Current month stats
     path('bulk-delete/', views.bulk_delete_jobs, name='bulk_delete_jobs'), # DELETE: Bulk delete jobs
     path('client/<str:object_id>/', views.job_by_client, name='job_by_client'), # GET: Jobs by client
     

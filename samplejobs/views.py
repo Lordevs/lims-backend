@@ -609,6 +609,139 @@ def job_stats(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 @any_authenticated_user
+def job_stats_current_month(request):
+    """
+    Get job statistics for the current month
+    """
+    try:
+        from mongoengine import connection
+        from datetime import datetime, timedelta
+        
+        db = connection.get_db()
+        jobs_collection = db.jobs
+        
+        # Get current month start and end dates
+        now = datetime.now()
+        current_month_start = datetime(now.year, now.month, 1)
+        
+        # Calculate next month start (end of current month)
+        if now.month == 12:
+            next_month_start = datetime(now.year + 1, 1, 1)
+        else:
+            next_month_start = datetime(now.year, now.month + 1, 1)
+        
+        # Query for jobs created in current month
+        current_month_query = {
+            'created_at': {
+                '$gte': current_month_start,
+                '$lt': next_month_start
+            }
+        }
+        
+        # Get current month statistics
+        current_month_jobs = jobs_collection.count_documents(current_month_query)
+        
+        # Get jobs by week in current month
+        weekly_stats = []
+        current_date = current_month_start
+        
+        while current_date < next_month_start:
+            week_end = min(current_date + timedelta(days=7), next_month_start)
+            
+            week_query = {
+                'created_at': {
+                    '$gte': current_date,
+                    '$lt': week_end
+                }
+            }
+            
+            week_jobs = jobs_collection.count_documents(week_query)
+            
+            weekly_stats.append({
+                'week_start': current_date.strftime('%Y-%m-%d'),
+                'week_end': (week_end - timedelta(days=1)).strftime('%Y-%m-%d'),
+                'jobs_count': week_jobs
+            })
+            
+            current_date = week_end
+        
+        # Get jobs by day in current month (last 7 days)
+        daily_stats = []
+        for i in range(7):
+            day_start = now - timedelta(days=i)
+            day_end = day_start + timedelta(days=1)
+            
+            day_query = {
+                'created_at': {
+                    '$gte': day_start,
+                    '$lt': day_end
+                }
+            }
+            
+            day_jobs = jobs_collection.count_documents(day_query)
+            
+            daily_stats.append({
+                'date': day_start.strftime('%Y-%m-%d'),
+                'jobs_count': day_jobs
+            })
+        
+        # Get top clients for current month
+        pipeline = [
+            {'$match': current_month_query},
+            {'$group': {'_id': '$client_id', 'jobs_count': {'$sum': 1}}},
+            {'$sort': {'jobs_count': -1}},
+            {'$limit': 5}
+        ]
+        
+        top_clients_raw = list(jobs_collection.aggregate(pipeline))
+        top_clients = []
+        
+        for client_data in top_clients_raw:
+            try:
+                from clients.models import Client
+                client = Client.objects.get(id=ObjectId(client_data['_id']))
+                top_clients.append({
+                    'client_id': str(client.id),
+                    'client_name': client.client_name,
+                    'jobs_count': client_data['jobs_count']
+                })
+            except (DoesNotExist, Exception):
+                top_clients.append({
+                    'client_id': str(client_data['_id']),
+                    'client_name': 'Unknown Client',
+                    'jobs_count': client_data['jobs_count']
+                })
+        
+        # Get total jobs for comparison
+        total_jobs = jobs_collection.count_documents({})
+        
+        return JsonResponse({
+            'status': 'success',
+            'data': {
+                'current_month': {
+                    'month': now.strftime('%Y-%m'),
+                    'month_name': now.strftime('%B %Y'),
+                    'jobs_count': current_month_jobs,
+                    'percentage_of_total': round((current_month_jobs / total_jobs * 100), 2) if total_jobs > 0 else 0
+                },
+                'weekly_breakdown': weekly_stats,
+                'daily_breakdown': daily_stats,
+                'top_clients': top_clients,
+                'total_jobs': total_jobs,
+                'generated_at': now.isoformat()
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@any_authenticated_user
 def job_by_client(request, object_id):
     """
     Get all jobs for a specific client
