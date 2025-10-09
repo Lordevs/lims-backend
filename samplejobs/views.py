@@ -70,16 +70,52 @@ def job_list(request):
             # Get pagination parameters
             page, limit, offset = get_pagination_params(request)
             
+            # Get search parameters
+            job_id_search = request.GET.get('job_id', '')
+            project_name_search = request.GET.get('project_name', '')
+            client_name_search = request.GET.get('client_name', '')
+            end_user_search = request.GET.get('end_user', '')
+            received_by_search = request.GET.get('received_by', '')
+            
             # Use raw query to avoid field validation issues with existing data
             from mongoengine import connection
             db = connection.get_db()
             jobs_collection = db.jobs
             
+            # Build query based on search parameters
+            query = {}
+            if job_id_search:
+                query['job_id'] = {'$regex': job_id_search, '$options': 'i'}
+            if project_name_search:
+                query['project_name'] = {'$regex': project_name_search, '$options': 'i'}
+            if end_user_search:
+                query['end_user'] = {'$regex': end_user_search, '$options': 'i'}
+            if received_by_search:
+                query['received_by'] = {'$regex': received_by_search, '$options': 'i'}
+            
+            # Handle client name search - need to find client IDs first
+            if client_name_search:
+                try:
+                    from clients.models import Client
+                    client_ids = []
+                    clients = Client.objects(client_name__icontains=client_name_search)
+                    for client in clients:
+                        client_ids.append(client.id)
+                    
+                    if client_ids:
+                        query['client_id'] = {'$in': client_ids}
+                    else:
+                        # No clients found with that name, return empty result
+                        query['client_id'] = {'$in': []}
+                except Exception:
+                    # If there's an error, return empty result
+                    query['client_id'] = {'$in': []}
+            
             # Get total count for pagination
-            total_records = jobs_collection.count_documents({})
+            total_records = jobs_collection.count_documents(query)
             
             # Get paginated jobs
-            jobs = jobs_collection.find({}).skip(offset).limit(limit).sort('created_at', -1)
+            jobs = jobs_collection.find(query).skip(offset).limit(limit).sort('created_at', -1)
             data = []
             
             for job_doc in jobs:

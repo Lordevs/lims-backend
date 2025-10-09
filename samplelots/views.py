@@ -615,17 +615,45 @@ def sample_lot_by_job(request, job_id):
         
         data = []
         for sample_lot_doc in sample_lots:
-            # Get test methods count
-            test_methods_count = len(sample_lot_doc.get('test_method_oids', []))
+            # Get test methods count and names
+            test_method_oids = sample_lot_doc.get('test_method_oids', [])
+            test_methods_count = len(test_method_oids) if test_method_oids else 0
+            test_method_names = []
+            
+            # Fetch test method names from test_methods collection
+            if test_method_oids:
+                test_methods_collection = db.test_methods
+                for test_method_oid in test_method_oids:
+                    try:
+                        test_method_doc = test_methods_collection.find_one(
+                            {'_id': ObjectId(test_method_oid)}, 
+                            {'test_name': 1}
+                        )
+                        if test_method_doc:
+                            test_method_names.append({
+                                'id': str(test_method_doc.get('_id')),
+                                'test_name': test_method_doc.get('test_name', 'Unknown Test')
+                            })
+                    except Exception:
+                        # Skip invalid test method references
+                        continue
             
             data.append({
                 'id': str(sample_lot_doc.get('_id', '')),
+                'job_id': str(sample_lot_doc.get('job_id', '')),
                 'item_no': sample_lot_doc.get('item_no', ''),
                 'sample_type': sample_lot_doc.get('sample_type', ''),
                 'material_type': sample_lot_doc.get('material_type', ''),
+                'condition': sample_lot_doc.get('condition', ''),
+                'heat_no': sample_lot_doc.get('heat_no', ''),
                 'description': sample_lot_doc.get('description', ''),
+                'mtc_no': sample_lot_doc.get('mtc_no', ''),
+                'storage_location': sample_lot_doc.get('storage_location', ''),
                 'test_methods_count': test_methods_count,
-                'created_at': sample_lot_doc.get('created_at').isoformat() if sample_lot_doc.get('created_at') else ''
+                'test_methods': test_method_names,
+                'is_active': sample_lot_doc.get('is_active', True),
+                'created_at': sample_lot_doc.get('created_at').isoformat() if sample_lot_doc.get('created_at') else '',
+                'updated_at': sample_lot_doc.get('updated_at').isoformat() if sample_lot_doc.get('updated_at') else ''
             })
         
         return JsonResponse({
