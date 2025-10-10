@@ -590,7 +590,6 @@ def certificate_item_search(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-@any_authenticated_user
 def certificate_item_by_certificate(request, certificate_oid):
     """
     Get all certificate items for a specific certificate by ObjectId
