@@ -118,6 +118,11 @@ def certificate_item_list(request):
                     'material_grade': item_doc.get('material_grade', ''),
                     'temperature': item_doc.get('temperature', ''),
                     'humidity': item_doc.get('humidity', ''),
+                    'po': item_doc.get('po', ''),
+                    'mtc_no': item_doc.get('mtc_no', ''),
+                    'heat_no': item_doc.get('heat_no', ''),
+                    'equipment_name': item_doc.get('equipment_name', ''),
+                    'equipment_calibration': item_doc.get('equipment_calibration', ''),
                     'specimen_sections': specimen_sections_data,
                     'total_specimens': total_specimens,
                     'comments': item_doc.get('comments', ''),
@@ -229,9 +234,7 @@ def certificate_item_list(request):
                 specimen_section = SpecimenSection(
                     test_results=section_data['test_results'],
                     images_list=images_list,
-                    specimen_id=ObjectId(section_data['specimen_id']),
-                    equipment_name=section_data.get('equipment_name', ''),
-                    equipment_calibration=section_data.get('equipment_calibration', '')
+                    specimen_id=ObjectId(section_data['specimen_id'])
                 )
                 validated_specimen_sections.append(specimen_section)
             
@@ -246,6 +249,8 @@ def certificate_item_list(request):
                 mtc_no=data.get('mtc_no', ''),
                 heat_no=data.get('heat_no', ''),
                 comments=data.get('comments', ''),
+                equipment_name=data.get('equipment_name', ''),
+                equipment_calibration=data.get('equipment_calibration', ''),
                 specimen_sections=validated_specimen_sections
             )
             certificate_item.save()
@@ -349,9 +354,7 @@ def certificate_item_detail(request, item_id):
                     'specimen_info': specimen_info,
                     'test_results': test_results_data,
                     'test_results_summary': test_results_data,  # For compatibility
-                    'images_list': images_data,
-                    'equipment_name': section.get('equipment_name', ''),
-                    'equipment_calibration': section.get('equipment_calibration', '')
+                    'images_list': images_data
                 })
             
             # Get certificate information
@@ -389,6 +392,8 @@ def certificate_item_detail(request, item_id):
                     'po': item_doc.get('po', ''),
                     'mtc_no': item_doc.get('mtc_no', ''),
                     'heat_no': item_doc.get('heat_no', ''),
+                    'equipment_name': item_doc.get('equipment_name', ''),
+                    'equipment_calibration': item_doc.get('equipment_calibration', ''),
                     'comments': item_doc.get('comments', ''),
                     'specimen_sections': specimen_sections_data,
                     'total_specimens': len(specimen_sections_data),
@@ -406,7 +411,8 @@ def certificate_item_detail(request, item_id):
                 # Update basic fields if provided
                 updateable_fields = [
                     'sample_preparation_method', 'material_grade', 'temperature', 
-                    'humidity', 'po', 'mtc_no', 'heat_no', 'comments'
+                    'humidity', 'po', 'mtc_no', 'heat_no', 'comments',
+                    'equipment_name', 'equipment_calibration'
                 ]
                 for field in updateable_fields:
                     if field in data:
@@ -517,6 +523,7 @@ def certificate_item_search(request):
         # Get query parameters
         certificate_id_query = request.GET.get('certificate_id', '')
         material_grade_query = request.GET.get('material_grade', '')
+        equipment_name_query = request.GET.get('equipment_name', '')
         specimen_id_query = request.GET.get('specimen_id', '')
         
         # Build query for raw MongoDB
@@ -533,6 +540,8 @@ def certificate_item_search(request):
                 }, status=400)
         if material_grade_query:
             query['material_grade'] = {'$regex': material_grade_query, '$options': 'i'}
+        if equipment_name_query:
+            query['equipment_name'] = {'$regex': equipment_name_query, '$options': 'i'}
         if specimen_id_query:
             try:
                 query['specimen_sections.specimen_id'] = ObjectId(specimen_id_query)
@@ -567,6 +576,7 @@ def certificate_item_search(request):
             'filters_applied': {
                 'certificate_id': certificate_id_query,
                 'material_grade': material_grade_query,
+                'equipment_name': equipment_name_query,
                 'specimen_id': specimen_id_query
             }
         })
@@ -581,58 +591,85 @@ def certificate_item_search(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 @any_authenticated_user
-def certificate_item_by_certificate(request, certificate_id):
+def certificate_item_by_certificate(request, certificate_oid):
     """
-    Get all certificate items for a specific certificate
+    Get all certificate items for a specific certificate by ObjectId
     """
     try:
+        # Validate ObjectId format
+        try:
+            obj_id = ObjectId(certificate_oid)
+        except Exception:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Invalid certificate ID format: {certificate_oid}'
+            }, status=400)
+        
         # Use raw query to find all certificate items for this certificate
         db = connection.get_db()
         certificate_items_collection = db.certificate_items
         
-        # query = {
-        #     'certificate_id': certificate_id,
-        #     #'is_active': True
-        # }
-
-        # Find the certificate by its string code
+        # Find the certificate by ObjectId
         db_certificates = db.complete_certificates
-        cert_doc = db_certificates.find_one({'certificate_id': certificate_id})
+        cert_doc = db_certificates.find_one({'_id': obj_id})
         if not cert_doc:
             return JsonResponse({
                 'status': 'error',
-                'message': f'Certificate with code {certificate_id} not found'
+                'message': f'Certificate with ID {certificate_oid} not found'
             }, status=404)
 
         query = {
-            'certificate_id': cert_doc['_id'],
+            'certificate_id': obj_id,
             # 'is_active': True
         }
         
-        certificate_items = certificate_items_collection.find(query)    #.sort('created_at', -1)
-        print(certificate_items)
+        certificate_items = certificate_items_collection.find(query).sort('created_at', -1)
         data = []
         
         for item_doc in certificate_items:
-            # Count specimens and images
-            specimen_count = len(item_doc.get('specimen_sections', []))
-            total_images = sum(len(section.get('images_list', [])) for section in item_doc.get('specimen_sections', []))
+            # Process specimen sections to match the exact format
+            specimen_sections_data = []
+            
+            for section in item_doc.get('specimen_sections', []):
+                # Get images data with caption field
+                images_data = []
+                for image in section.get('images_list', []):
+                    images_data.append({
+                        'image_url': image.get('image_url', ''),
+                        'caption': image.get('caption', '')
+                    })
+                
+                specimen_sections_data.append({
+                    'test_results': section.get('test_results', ''),  # Keep as JSON string
+                    'images_list': images_data,
+                    'specimen_id': str(section.get('specimen_id'))  # Convert ObjectId to string
+                })
             
             data.append({
-                'id': str(item_doc.get('_id', '')),
-                'certificate_id': str(item_doc.get('certificate_id', '')),
+                '_id': str(item_doc.get('_id')),  # Convert ObjectId to string
+                'certificate_id': str(item_doc.get('certificate_id')),  # Convert ObjectId to string
+                'sample_preparation_method': item_doc.get('sample_preparation_method', ''),
                 'material_grade': item_doc.get('material_grade', ''),
-                'specimen_count': specimen_count,
-                'images_count': total_images,
+                'temperature': item_doc.get('temperature', ''),
+                'humidity': item_doc.get('humidity', ''),
+                'po': item_doc.get('po', ''),
+                'mtc_no': item_doc.get('mtc_no', ''),
+                'heat_no': item_doc.get('heat_no', ''),
                 'comments': item_doc.get('comments', ''),
-                'created_at': item_doc.get('created_at').isoformat() if item_doc.get('created_at') else ''
+                'specimen_sections': specimen_sections_data,
+                'equipment_name': item_doc.get('equipment_name', ''),
+                'equipment_calibration': item_doc.get('equipment_calibration', ''),
+                'created_at': item_doc.get('created_at'),  # Keep as datetime
+                'updated_at': item_doc.get('updated_at'),  # Keep as datetime
+                'is_active': item_doc.get('is_active', True)
             })
         
         return JsonResponse({
             'status': 'success',
             'data': data,
             'total': len(data),
-            'certificate_id': certificate_id
+            'certificate_oid': certificate_oid,
+            'certificate_id': cert_doc.get('certificate_id', '')
         })
         
     except Exception as e:
@@ -716,6 +753,137 @@ def certificate_item_stats(request):
                 'unique_certificates_count': len(stats.get('unique_certificates', [])),
                 'unique_materials_count': len(stats.get('unique_materials', [])),
                 'top_materials': material_stats
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@any_authenticated_user
+def upload_image(request):
+    """
+    Upload image file and return URL
+    """
+    try:
+        import os
+        import uuid
+        from datetime import datetime
+        from django.core.files.storage import default_storage
+        from django.core.files.base import ContentFile
+        
+        # Check if image file is provided
+        if 'image' not in request.FILES:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No image file provided. Please include an image file in the request.'
+            }, status=400)
+        
+        # Check if specimen_id is provided
+        specimen_id = request.POST.get('specimen_id')
+        if not specimen_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'specimen_id is required. Please provide specimen_id in the request.'
+            }, status=400)
+        
+        # Validate specimen_id format (should be ObjectId)
+        try:
+            from bson import ObjectId
+            specimen_oid = ObjectId(specimen_id)
+        except Exception:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Invalid specimen_id format: {specimen_id}'
+            }, status=400)
+        
+        # Validate specimen exists
+        try:
+            from mongoengine import connection
+            db = connection.get_db()
+            specimens_collection = db.specimens
+            specimen_doc = specimens_collection.find_one({'_id': specimen_oid})
+            if not specimen_doc:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Specimen with ID {specimen_id} not found'
+                }, status=404)
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Error validating specimen: {str(e)}'
+            }, status=500)
+        
+        image_file = request.FILES['image']
+        
+        # Validate file size (max 10MB)
+        max_size = 10 * 1024 * 1024  # 10MB
+        if image_file.size > max_size:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Image size exceeds maximum allowed size of {max_size // (1024*1024)}MB'
+            }, status=400)
+        
+        # Ensure file is not empty
+        if image_file.size == 0:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Empty file provided'
+            }, status=400)
+        
+        # Validate file extension
+        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+        file_extension = os.path.splitext(image_file.name)[1].lower()
+        if file_extension not in allowed_extensions:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Invalid image format. Allowed formats: {", ".join(allowed_extensions)}'
+            }, status=400)
+        
+        # Generate unique filename with standard date-time format
+        now = datetime.now()
+        timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
+        unique_id = str(uuid.uuid4())[:8]
+        unique_filename = f"img_{timestamp}_{unique_id}{file_extension}"
+        
+        # Create file path with specimen_id folder structure
+        file_path = f"certificate_images/{specimen_id}/{unique_filename}"
+        
+        # Save file
+        image_file.seek(0)  # Reset file pointer to beginning
+        file_content = image_file.read()
+        saved_path = default_storage.save(file_path, ContentFile(file_content))
+        
+        # Generate URL
+        file_url = default_storage.url(saved_path)
+        
+        # Get file info
+        file_size = default_storage.size(saved_path)
+        
+        # Get specimen information for response
+        specimen_info = {
+            'specimen_id': str(specimen_doc.get('_id', '')),
+            'specimen_name': specimen_doc.get('specimen_id', 'Unknown')
+        }
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Image uploaded successfully',
+            'data': {
+                'image_url': file_url,
+                'filename': unique_filename,
+                'original_filename': image_file.name,
+                'file_size': file_size,
+                'file_extension': file_extension,
+                'specimen_id': specimen_id,
+                'specimen_info': specimen_info,
+                'uploaded_at': now.strftime("%Y-%m-%d %H:%M:%S"),
+                'file_path': saved_path
             }
         })
         

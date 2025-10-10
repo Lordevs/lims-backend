@@ -299,19 +299,28 @@ def certificate_list(request):
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "DELETE"])
 @any_authenticated_user
-def certificate_detail(request, certificate_id):
+def certificate_detail(request, certificate_oid):
     """
-    Get, update, or delete a specific certificate by certificate_id
+    Get, update, or delete a specific certificate by ObjectId
     GET: Returns certificate details with complete sample preparation information
     PUT: Updates certificate information
     DELETE: Deletes the certificate (soft delete)
     """
     try:
-        # Use raw query to find certificate by certificate_id
+        # Validate ObjectId format
+        try:
+            obj_id = ObjectId(certificate_oid)
+        except Exception:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Invalid certificate ID format: {certificate_oid}'
+            }, status=400)
+        
+        # Use raw query to find certificate by ObjectId
         db = connection.get_db()
         certificates_collection = db.complete_certificates
         
-        cert_doc = certificates_collection.find_one({'certificate_id': certificate_id})
+        cert_doc = certificates_collection.find_one({'_id': obj_id})
         if not cert_doc:
             return JsonResponse({
                 'status': 'error',
@@ -320,14 +329,14 @@ def certificate_detail(request, certificate_id):
         
         if request.method == 'GET':
             # Get detailed sample preparation information
-            request_info = {
-                'request_id': str(cert_doc.get('request_id', '')),
-                'request_no': 'Unknown',
-                'sample_lots_count': 0,
-                'total_specimens': 0,
-                'sample_lots': [],
-                'specimens': []
-            }
+            # request_info = {
+            #     'request_id': str(cert_doc.get('request_id', '')),
+            #     'request_no': 'Unknown',
+            #     'sample_lots_count': 0,
+            #     'total_specimens': 0,
+            #     'sample_lots': [],
+            #     'specimens': []
+            # }
             
             try:
                 # request_id is the ObjectId of the sample preparation
@@ -437,15 +446,15 @@ def certificate_detail(request, certificate_id):
                                 'specimens_count': len(sample_lot_specimens)
                             })
                         
-                        request_info.update({
-                            'request_no': sample_prep_doc.get('request_no', 'Unknown'),
-                            'sample_lots_count': len(sample_prep_doc.get('sample_lots', [])),
-                            'total_specimens': len(all_specimens),
-                            'sample_lots': sample_lots_details,
-                            'specimens': all_specimens,
-                            'created_at': sample_prep_doc.get('created_at').isoformat() if sample_prep_doc.get('created_at') else '',
-                            'updated_at': sample_prep_doc.get('updated_at').isoformat() if sample_prep_doc.get('updated_at') else ''
-                        })
+                        # request_info.update({
+                        #     'request_no': sample_prep_doc.get('request_no', 'Unknown'),
+                        #     'sample_lots_count': len(sample_prep_doc.get('sample_lots', [])),
+                        #     'total_specimens': len(all_specimens),
+                        #     'sample_lots': sample_lots_details,
+                        #     'specimens': all_specimens,
+                        #     'created_at': sample_prep_doc.get('created_at').isoformat() if sample_prep_doc.get('created_at') else '',
+                        #     'updated_at': sample_prep_doc.get('updated_at').isoformat() if sample_prep_doc.get('updated_at') else ''
+                        # })
             except (DoesNotExist, Exception) as e:
                 print(f"Error fetching sample preparation: {e}")
             
@@ -463,7 +472,7 @@ def certificate_detail(request, certificate_id):
                     'customer_po': cert_doc.get('customer_po', ''),
                     'tested_by': cert_doc.get('tested_by', ''),
                     'reviewed_by': cert_doc.get('reviewed_by', ''),
-                    'request_info': request_info,
+                    # 'request_info': request_info,
                     'created_at': cert_doc.get('created_at').isoformat() if cert_doc.get('created_at') else '',
                     'updated_at': cert_doc.get('updated_at').isoformat() if cert_doc.get('updated_at') else ''
                 }
@@ -494,7 +503,7 @@ def certificate_detail(request, certificate_id):
                 
                 # Update the document
                 result = certificates_collection.update_one(
-                    {'certificate_id': certificate_id},
+                    {'_id': obj_id},
                     {'$set': update_doc}
                 )
                 
@@ -505,7 +514,7 @@ def certificate_detail(request, certificate_id):
                     }, status=400)
                 
                 # Get updated certificate document
-                updated_cert = certificates_collection.find_one({'certificate_id': certificate_id})
+                updated_cert = certificates_collection.find_one({'_id': obj_id})
                 
                 return JsonResponse({
                     'status': 'success',
@@ -532,7 +541,7 @@ def certificate_detail(request, certificate_id):
         elif request.method == 'DELETE':
             # Delete the document completely
             result = certificates_collection.delete_one(
-                {'certificate_id': certificate_id}
+                {'_id': obj_id}
             )
             
             if result.deleted_count == 0:
@@ -545,7 +554,8 @@ def certificate_detail(request, certificate_id):
                 'status': 'success',
                 'message': 'Certificate deleted successfully',
                 'data': {
-                    'certificate_id': certificate_id,
+                    'id': str(obj_id),
+                    'certificate_id': cert_doc.get('certificate_id', ''),
                     'deleted_at': datetime.now().isoformat()
                 }
             })

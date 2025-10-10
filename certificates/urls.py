@@ -13,5 +13,5 @@ urlpatterns = [
     path('request/<str:request_no>/', views.certificate_by_request, name='certificate_by_request'), # GET: Certificates by request
     
     # Detail endpoint - this must come LAST to avoid conflicts
-    path('<str:certificate_id>/', views.certificate_detail, name='certificate_detail'), # GET: Detail, PUT: Update, DELETE: Delete
+    path('<str:certificate_oid>/', views.certificate_detail, name='certificate_detail'), # GET: Detail, PUT: Update, DELETE: Delete
 ]
