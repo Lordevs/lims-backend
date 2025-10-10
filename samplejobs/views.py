@@ -93,14 +93,14 @@ def job_list(request):
             if received_by_search:
                 query['received_by'] = {'$regex': received_by_search, '$options': 'i'}
             
-            # Handle client name search - need to find client IDs first
+            # Handle client name search - need to find client IDs first using raw MongoDB query
             if client_name_search:
                 try:
-                    from clients.models import Client
-                    client_ids = []
-                    clients = Client.objects(client_name__icontains=client_name_search)
-                    for client in clients:
-                        client_ids.append(client.id)
+                    clients_collection = db.clients
+                    client_docs = clients_collection.find({
+                        'client_name': {'$regex': client_name_search, '$options': 'i'}
+                    })
+                    client_ids = [doc['_id'] for doc in client_docs]
                     
                     if client_ids:
                         query['client_id'] = {'$in': client_ids}
@@ -119,12 +119,19 @@ def job_list(request):
             data = []
             
             for job_doc in jobs:
-                # Get client information
+                # Get client information using raw MongoDB query
                 client_name = "Unknown Client"
                 try:
-                    client = Client.objects.get(id=ObjectId(job_doc.get('client_id')))
-                    client_name = client.client_name
-                except (DoesNotExist, Exception):
+                    clients_collection = db.clients
+                    client_obj_id = job_doc.get('client_id')
+                    if client_obj_id:
+                        # Handle both ObjectId and string client_id
+                        if isinstance(client_obj_id, str):
+                            client_obj_id = ObjectId(client_obj_id)
+                        client_doc = clients_collection.find_one({'_id': client_obj_id})
+                        if client_doc:
+                            client_name = client_doc.get('client_name', 'Unknown Client')
+                except Exception:
                     pass
                 
                 # Get sample lots count for this job
@@ -310,20 +317,27 @@ def job_detail(request, object_id):
             }, status=404)
         
         if request.method == 'GET':
-            # Get client information
+            # Get client information using raw MongoDB query
             client_name = "Unknown Client"
             client_info = {}
             try:
-                client = Client.objects.get(id=ObjectId(job_doc.get('client_id')))
-                client_name = client.client_name
-                client_info = {
-                    'client_id': str(client.id),
-                    'client_name': client.client_name,
-                    'company_name': client.company_name,
-                    'email': client.email,
-                    'phone': client.phone
-                }
-            except DoesNotExist:
+                clients_collection = db.clients
+                client_obj_id = job_doc.get('client_id')
+                if client_obj_id:
+                    # Handle both ObjectId and string client_id
+                    if isinstance(client_obj_id, str):
+                        client_obj_id = ObjectId(client_obj_id)
+                    client_doc = clients_collection.find_one({'_id': client_obj_id})
+                    if client_doc:
+                        client_name = client_doc.get('client_name', 'Unknown Client')
+                        client_info = {
+                            'client_id': str(client_doc.get('_id', '')),
+                            'client_name': client_doc.get('client_name', ''),
+                            'company_name': client_doc.get('company_name', ''),
+                            'email': client_doc.get('email', ''),
+                            'phone': client_doc.get('phone', '')
+                        }
+            except Exception:
                 pass
             
             # Get sample lots count for this job
@@ -417,12 +431,19 @@ def job_detail(request, object_id):
                 # Get updated job document
                 updated_job = jobs_collection.find_one({'_id': object_id})
                 
-                # Get updated client name
+                # Get updated client name using raw MongoDB query
                 client_name = "Unknown Client"
                 try:
-                    client = Client.objects.get(id=ObjectId(updated_job.get('client_id')))
-                    client_name = client.client_name
-                except DoesNotExist:
+                    clients_collection = db.clients
+                    client_obj_id = updated_job.get('client_id')
+                    if client_obj_id:
+                        # Handle both ObjectId and string client_id
+                        if isinstance(client_obj_id, str):
+                            client_obj_id = ObjectId(client_obj_id)
+                        client_doc = clients_collection.find_one({'_id': client_obj_id})
+                        if client_doc:
+                            client_name = client_doc.get('client_name', 'Unknown Client')
+                except Exception:
                     pass
                 
                 return JsonResponse({
@@ -507,18 +528,22 @@ def job_search(request):
     """
     Search jobs by various criteria
     Query parameters:
+    - job_id: Search by job ID (case-insensitive)
     - project: Search by project name (case-insensitive)
     - client_id: Search by client ID
     - received_by: Search by received_by field
     """
     try:
         # Get query parameters
+        job_id = request.GET.get('job_id', '')
         project = request.GET.get('project', '')
         client_id = request.GET.get('client_id', '')
         received_by = request.GET.get('received_by', '')
         
         # Build query for raw MongoDB
         query = {}
+        if job_id:
+            query['job_id'] = {'$regex': job_id, '$options': 'i'}
         if project:
             query['project_name'] = {'$regex': project, '$options': 'i'}
         if client_id:
@@ -541,12 +566,19 @@ def job_search(request):
         
         data = []
         for job_doc in jobs:
-            # Get client information
+            # Get client information using raw MongoDB query
             client_name = "Unknown Client"
             try:
-                client = Client.objects.get(id=ObjectId(job_doc.get('client_id')))
-                client_name = client.client_name
-            except (DoesNotExist, Exception):
+                clients_collection = db.clients
+                client_obj_id = job_doc.get('client_id')
+                if client_obj_id:
+                    # Handle both ObjectId and string client_id
+                    if isinstance(client_obj_id, str):
+                        client_obj_id = ObjectId(client_obj_id)
+                    client_doc = clients_collection.find_one({'_id': client_obj_id})
+                    if client_doc:
+                        client_name = client_doc.get('client_name', 'Unknown Client')
+            except Exception:
                 pass
             
             data.append({
@@ -564,6 +596,7 @@ def job_search(request):
             'data': data,
             'total': len(data),
             'filters_applied': {
+                'job_id': job_id,
                 'project': project,
                 'client_id': client_id,
                 'received_by': received_by

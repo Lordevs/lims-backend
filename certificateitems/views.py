@@ -436,12 +436,56 @@ def certificate_item_detail(request, item_id):
                             'message': 'Error validating certificate'
                         }, status=400)
                 
-                # For specimen_sections update, we need more complex handling
+                # Handle specimen_sections update
                 if 'specimen_sections' in data:
-                    return JsonResponse({
-                        'status': 'error',
-                        'message': 'Updating specimen_sections is complex. Please use DELETE and CREATE for specimen section changes.'
-                    }, status=400)
+                    specimen_sections_data = data['specimen_sections']
+                    
+                    # Validate and process specimen sections
+                    processed_sections = []
+                    for section in specimen_sections_data:
+                        # Validate specimen_id
+                        if 'specimen_id' not in section:
+                            return JsonResponse({
+                                'status': 'error',
+                                'message': 'specimen_id is required for each specimen section'
+                            }, status=400)
+                        
+                        try:
+                            specimen_obj_id = ObjectId(section['specimen_id'])
+                        except Exception:
+                            return JsonResponse({
+                                'status': 'error',
+                                'message': f'Invalid specimen_id format: {section["specimen_id"]}'
+                            }, status=400)
+                        
+                        # Validate specimen exists
+                        specimens_collection = db.specimens
+                        specimen_doc = specimens_collection.find_one({'_id': specimen_obj_id})
+                        if not specimen_doc:
+                            return JsonResponse({
+                                'status': 'error',
+                                'message': f'Specimen with ID {section["specimen_id"]} not found'
+                            }, status=404)
+                        
+                        # Process the section data
+                        processed_section = {
+                            'specimen_id': specimen_obj_id,
+                            'test_results': section.get('test_results', ''),
+                            'images_list': section.get('images_list', [])
+                        }
+                        
+                        # Validate images_list if provided
+                        if 'images_list' in section:
+                            for image in section['images_list']:
+                                if 'image_url' not in image:
+                                    return JsonResponse({
+                                        'status': 'error',
+                                        'message': 'image_url is required for each image'
+                                    }, status=400)
+                        
+                        processed_sections.append(processed_section)
+                    
+                    update_doc['specimen_sections'] = processed_sections
                 
                 update_doc['updated_at'] = datetime.now()
                 

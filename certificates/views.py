@@ -377,15 +377,40 @@ def certificate_detail(request, certificate_oid):
                                     # Get job information
                                     try:
                                         jobs_collection = db.jobs
-                                        job_obj = jobs_collection.find_one({'_id': sample_lot_obj.get('job_id')})
-                                        if job_obj:
-                                            sample_lot_info['job_id'] = job_obj.get('job_id', 'Unknown')
-                                            sample_lot_info['job_details'] = {
-                                                'project_name': job_obj.get('project_name', ''),
-                                                'end_user': job_obj.get('end_user', ''),
-                                                'receive_date': job_obj.get('receive_date', '')
-                                            }
-                                    except Exception:
+                                        job_obj_id = sample_lot_obj.get('job_id')
+                                        if job_obj_id:
+                                            # Handle both ObjectId and string job_id
+                                            if isinstance(job_obj_id, str):
+                                                job_obj_id = ObjectId(job_obj_id)
+                                            
+                                            job_obj = jobs_collection.find_one({'_id': job_obj_id})
+                                            if job_obj:
+                                                sample_lot_info['job_id'] = job_obj.get('job_id', 'Unknown')
+                                                
+                                                # Get client information
+                                                client_name = 'Unknown'
+                                                try:
+                                                    clients_collection = db.clients
+                                                    client_obj_id = job_obj.get('client_id')
+                                                    if client_obj_id:
+                                                        # Handle both ObjectId and string client_id
+                                                        if isinstance(client_obj_id, str):
+                                                            client_obj_id = ObjectId(client_obj_id)
+                                                        client_obj = clients_collection.find_one({'_id': client_obj_id})
+                                                        if client_obj:
+                                                            client_name = client_obj.get('client_name', 'Unknown')
+                                                except Exception as e:
+                                                    print(f"Error fetching client: {e}")
+                                                    pass
+                                                
+                                                sample_lot_info['job_details'] = {
+                                                    'project_name': job_obj.get('project_name', ''),
+                                                    'end_user': job_obj.get('end_user', ''),
+                                                    'receive_date': job_obj.get('receive_date', ''),
+                                                    'client_name': client_name
+                                                }
+                                    except Exception as e:
+                                        print(f"Error fetching job: {e}")
                                         pass
                             except Exception:
                                 pass
@@ -457,11 +482,49 @@ def certificate_detail(request, certificate_oid):
             except (DoesNotExist, Exception) as e:
                 print(f"Error fetching sample preparation: {e}")
             
+            # Get job information directly from job collection using sample preparation data
+            client_name = 'Unknown'
+            job_id = 'Unknown'
+            project_name = 'Unknown'
+            
+            try:
+                # Get job information from the first sample lot in sample preparation
+                if request_info.get('sample_lots') and len(request_info['sample_lots']) > 0:
+                    first_sample_lot = request_info['sample_lots'][0]
+                    sample_lot_id = first_sample_lot.get('sample_lot_info', {}).get('sample_lot_id')
+                    
+                    if sample_lot_id:
+                        # Get sample lot document
+                        sample_lots_collection = db.sample_lots
+                        sample_lot_doc = sample_lots_collection.find_one({'_id': ObjectId(sample_lot_id)})
+                        
+                        if sample_lot_doc and sample_lot_doc.get('job_id'):
+                            # Get job document
+                            jobs_collection = db.jobs
+                            job_doc = jobs_collection.find_one({'_id': sample_lot_doc.get('job_id')})
+                            
+                            if job_doc:
+                                job_id = job_doc.get('job_id', 'Unknown')
+                                project_name = job_doc.get('project_name', 'Unknown')
+                                
+                                # Get client information
+                                if job_doc.get('client_id'):
+                                    clients_collection = db.clients
+                                    client_doc = clients_collection.find_one({'_id': job_doc.get('client_id')})
+                                    if client_doc:
+                                        client_name = client_doc.get('client_name', 'Unknown')
+            except Exception as e:
+                print(f"Error getting job/client info: {e}")
+                pass
+            
             return JsonResponse({
                 'status': 'success',
                 'data': {
                     'id': str(cert_doc.get('_id', '')),
                     'certificate_id': cert_doc.get('certificate_id', ''),
+                    'client_name': client_name,
+                    'job_id': job_id,
+                    'project_name': project_name,
                     'date_of_sampling': cert_doc.get('date_of_sampling', ''),
                     'date_of_testing': cert_doc.get('date_of_testing', ''),
                     'issue_date': cert_doc.get('issue_date', ''),
@@ -770,6 +833,257 @@ def certificate_by_request(request, request_no):
                 'sample_lots_count': len(sample_prep_doc.get('sample_lots', [])),
                 'total_specimens': sum(len(sl.get('specimen_oids', [])) for sl in sample_prep_doc.get('sample_lots', []))
             }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def certificate_by_job(request, job_oid):
+    """
+    Get all certificates for a specific job by ObjectId
+    """
+    try:
+        # Validate ObjectId format
+        try:
+            job_obj_id = ObjectId(job_oid)
+        except Exception:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Invalid job ID format: {job_oid}'
+            }, status=400)
+        
+        # Use raw query to find certificates for this job
+        db = connection.get_db()
+        certificates_collection = db.complete_certificates
+        
+        # Find the job first to validate it exists
+        jobs_collection = db.jobs
+        job_doc = jobs_collection.find_one({'_id': job_obj_id})
+        if not job_doc:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Job with ID {job_oid} not found'
+            }, status=404)
+        
+        # Get client information for the job
+        client_name = 'Unknown'
+        try:
+            clients_collection = db.clients
+            client_obj_id = job_doc.get('client_id')
+            if client_obj_id:
+                if isinstance(client_obj_id, str):
+                    client_obj_id = ObjectId(client_obj_id)
+                client_doc = clients_collection.find_one({'_id': client_obj_id})
+                if client_doc:
+                    client_name = client_doc.get('client_name', 'Unknown')
+        except Exception:
+            pass
+        
+        # Get all certificates
+        certificates = certificates_collection.find({}).sort('created_at', -1)
+        data = []
+        
+        for cert_doc in certificates:
+            # Check if this certificate is related to the specified job
+            # We need to check through the sample preparation -> sample lots -> job relationship
+            is_related_to_job = False
+            
+            try:
+                # Get sample preparation information
+                sample_prep_id = cert_doc.get('request_id')
+                if sample_prep_id:
+                    sample_prep_collection = db.sample_preparations
+                    sample_prep_doc = sample_prep_collection.find_one({'_id': ObjectId(sample_prep_id)})
+                    
+                    if sample_prep_doc:
+                        # Check if any sample lot in this preparation belongs to the specified job
+                        for sample_lot in sample_prep_doc.get('sample_lots', []):
+                            sample_lot_id = sample_lot.get('sample_lot_id')
+                            if sample_lot_id:
+                                try:
+                                    sample_lots_collection = db.sample_lots
+                                    sample_lot_doc = sample_lots_collection.find_one({'_id': ObjectId(sample_lot_id)})
+                                    
+                                    if sample_lot_doc and sample_lot_doc.get('job_id') == job_obj_id:
+                                        is_related_to_job = True
+                                        break
+                                except Exception:
+                                    pass
+            except Exception:
+                pass
+            
+            # Only include this certificate if it's related to the specified job
+            if is_related_to_job:
+                # Get detailed sample preparation information
+                request_info = {
+                    'request_id': str(cert_doc.get('request_id', '')),
+                    'request_no': 'Unknown',
+                    'sample_lots_count': 0,
+                    'total_specimens': 0,
+                    'sample_lots': [],
+                    'specimens': []
+                }
+                
+                try:
+                    # request_id is the ObjectId of the sample preparation
+                    sample_prep_id = cert_doc.get('request_id')
+                    if sample_prep_id:
+                        # Use raw MongoDB query to find sample preparation
+                        sample_prep_collection = db.sample_preparations
+                        sample_prep_doc = sample_prep_collection.find_one({'_id': ObjectId(sample_prep_id)})
+                        
+                        if sample_prep_doc:
+                            # Get detailed sample lots and specimens information
+                            sample_lots_details = []
+                            all_specimens = []
+                            
+                            for sample_lot in sample_prep_doc.get('sample_lots', []):
+                                # Get sample lot information
+                                sample_lot_obj = None
+                                sample_lot_info = {
+                                    'sample_lot_id': str(sample_lot.get('sample_lot_id', '')),
+                                    'item_no': 'Unknown',
+                                    'sample_type': 'Unknown',
+                                    'material_type': 'Unknown',
+                                    'description': 'Unknown',
+                                    'job_id': 'Unknown',
+                                    'job_details': {}
+                                }
+                                
+                                try:
+                                    sample_lots_collection = db.sample_lots
+                                    sample_lot_obj = sample_lots_collection.find_one({'_id': ObjectId(sample_lot.get('sample_lot_id'))})
+                                    if sample_lot_obj:
+                                        sample_lot_info.update({
+                                            'item_no': sample_lot_obj.get('item_no', 'Unknown'),
+                                            'sample_type': sample_lot_obj.get('sample_type', 'Unknown'),
+                                            'material_type': sample_lot_obj.get('material_type', 'Unknown'),
+                                            'description': sample_lot_obj.get('description', 'Unknown')
+                                        })
+                                        
+                                        # Get job information
+                                        try:
+                                            jobs_collection = db.jobs
+                                            job_obj = jobs_collection.find_one({'_id': sample_lot_obj.get('job_id')})
+                                            if job_obj:
+                                                sample_lot_info['job_id'] = job_obj.get('job_id', 'Unknown')
+                                                sample_lot_info['job_details'] = {
+                                                    'project_name': job_obj.get('project_name', ''),
+                                                    'end_user': job_obj.get('end_user', ''),
+                                                    'receive_date': job_obj.get('receive_date', ''),
+                                                    'client_name': client_name
+                                                }
+                                        except Exception:
+                                            pass
+                                except Exception:
+                                    pass
+                                
+                                # Get test method information
+                                test_method_info = {
+                                    'test_method_oid': str(sample_lot.get('test_method_oid', '')),
+                                    'test_name': 'Unknown Method',
+                                    'test_description': 'Unknown'
+                                }
+                                try:
+                                    test_methods_collection = db.test_methods
+                                    test_method_obj = test_methods_collection.find_one({'_id': ObjectId(sample_lot.get('test_method_oid'))})
+                                    if test_method_obj:
+                                        test_method_info.update({
+                                            'test_name': test_method_obj.get('test_name', 'Unknown Method'),
+                                            'test_description': test_method_obj.get('test_description', 'Unknown'),
+                                            'test_columns': test_method_obj.get('test_columns', []),
+                                            'hasImage': test_method_obj.get('hasImage', False)
+                                        })
+                                except Exception:
+                                    pass
+                                
+                                # Get specimens information for this sample lot
+                                sample_lot_specimens = []
+                                for specimen_oid in sample_lot.get('specimen_oids', []):
+                                    specimen_info = {
+                                        'specimen_oid': str(specimen_oid),
+                                        'specimen_id': 'Unknown',
+                                        'created_at': '',
+                                        'updated_at': ''
+                                    }
+                                    try:
+                                        specimens_collection = db.specimens
+                                        specimen_obj = specimens_collection.find_one({'_id': ObjectId(specimen_oid)})
+                                        if specimen_obj:
+                                            specimen_info.update({
+                                                'specimen_id': specimen_obj.get('specimen_id', 'Unknown'),
+                                                'created_at': specimen_obj.get('created_at').isoformat() if specimen_obj.get('created_at') else '',
+                                                'updated_at': specimen_obj.get('updated_at').isoformat() if specimen_obj.get('updated_at') else ''
+                                            })
+                                    except Exception:
+                                        pass
+                                    
+                                    sample_lot_specimens.append(specimen_info)
+                                    all_specimens.append(specimen_info)
+                                
+                                sample_lots_details.append({
+                                    'item_description': sample_lot.get('item_description', ''),
+                                    'planned_test_date': sample_lot.get('planned_test_date'),
+                                    'dimension_spec': sample_lot.get('dimension_spec'),
+                                    'request_by': sample_lot.get('request_by'),
+                                    'remarks': sample_lot.get('remarks'),
+                                    'sample_lot_info': sample_lot_info,
+                                    'test_method': test_method_info,
+                                    'specimens': sample_lot_specimens,
+                                    'specimens_count': len(sample_lot_specimens)
+                                })
+                            
+                            request_info.update({
+                                'request_no': sample_prep_doc.get('request_no', 'Unknown'),
+                                'sample_lots_count': len(sample_prep_doc.get('sample_lots', [])),
+                                'total_specimens': len(all_specimens),
+                                'sample_lots': sample_lots_details,
+                                'specimens': all_specimens,
+                                'created_at': sample_prep_doc.get('created_at').isoformat() if sample_prep_doc.get('created_at') else '',
+                                'updated_at': sample_prep_doc.get('updated_at').isoformat() if sample_prep_doc.get('updated_at') else ''
+                            })
+                except (DoesNotExist, Exception) as e:
+                    print(f"Error fetching sample preparation: {e}")
+                
+                # Extract client name, job ID, and project name from the job document
+                cert_client_name = client_name  # Use the client name we already retrieved
+                cert_job_id = job_doc.get('job_id', 'Unknown')
+                cert_project_name = job_doc.get('project_name', 'Unknown')
+                
+                data.append({
+                    'id': str(cert_doc.get('_id', '')),
+                    'certificate_id': cert_doc.get('certificate_id', ''),
+                    'client_name': cert_client_name,
+                    'job_id': cert_job_id,
+                    'project_name': cert_project_name,
+                    'date_of_sampling': cert_doc.get('date_of_sampling', ''),
+                    'date_of_testing': cert_doc.get('date_of_testing', ''),
+                    'issue_date': cert_doc.get('issue_date', ''),
+                    'revision_no': cert_doc.get('revision_no', ''),
+                    'customers_name_no': cert_doc.get('customers_name_no', ''),
+                    'atten': cert_doc.get('atten', ''),
+                    'customer_po': cert_doc.get('customer_po', ''),
+                    'tested_by': cert_doc.get('tested_by', ''),
+                    'reviewed_by': cert_doc.get('reviewed_by', ''),
+                    'request_info': request_info,
+                    'created_at': cert_doc.get('created_at').isoformat() if cert_doc.get('created_at') else '',
+                    'updated_at': cert_doc.get('updated_at').isoformat() if cert_doc.get('updated_at') else ''
+                })
+        
+        return JsonResponse({
+            'status': 'success',
+            'data': data,
+            'total': len(data),
+            'job_oid': job_oid,
+            'job_id': job_doc.get('job_id', ''),
+            'project_name': job_doc.get('project_name', ''),
+            'client_name': client_name
         })
         
     except Exception as e:

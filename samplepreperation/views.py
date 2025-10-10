@@ -758,3 +758,183 @@ def sample_preparation_stats(request):
             'status': 'error',
             'message': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def sample_preparation_by_job(request, job_oid):
+    """
+    Get all sample preparations for a specific job by ObjectId
+    """
+    try:
+        # Validate ObjectId format
+        try:
+            job_obj_id = ObjectId(job_oid)
+        except Exception:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Invalid job ID format: {job_oid}'
+            }, status=400)
+        
+        # Use raw query to find sample preparations for this job
+        db = connection.get_db()
+        sample_preparations_collection = db.sample_preparations
+        
+        # Find the job first to validate it exists
+        jobs_collection = db.jobs
+        job_doc = jobs_collection.find_one({'_id': job_obj_id})
+        if not job_doc:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Job with ID {job_oid} not found'
+            }, status=404)
+        
+        # Get client information for the job
+        client_name = 'Unknown'
+        try:
+            clients_collection = db.clients
+            client_obj_id = job_doc.get('client_id')
+            if client_obj_id:
+                if isinstance(client_obj_id, str):
+                    client_obj_id = ObjectId(client_obj_id)
+                client_doc = clients_collection.find_one({'_id': client_obj_id})
+                if client_doc:
+                    client_name = client_doc.get('client_name', 'Unknown')
+        except Exception:
+            pass
+        
+        # Get all sample preparations
+        sample_preparations = sample_preparations_collection.find({}).sort('created_at', -1)
+        data = []
+        
+        for prep_doc in sample_preparations:
+            # Check if this sample preparation has any sample lots from the specified job
+            has_job_sample_lots = False
+            sample_lots_data = []
+            
+            for sample_lot in prep_doc.get('sample_lots', []):
+                # Get sample lot information
+                sample_lot_id = sample_lot.get('sample_lot_id')
+                if sample_lot_id:
+                    try:
+                        sample_lots_collection = db.sample_lots
+                        sample_lot_doc = sample_lots_collection.find_one({'_id': ObjectId(sample_lot_id)})
+                        
+                        if sample_lot_doc and sample_lot_doc.get('job_id') == job_obj_id:
+                            has_job_sample_lots = True
+                            
+                            # Get job information
+                            job_info = {
+                                'job_id': job_doc.get('job_id', 'Unknown'),
+                                'project_name': job_doc.get('project_name', ''),
+                                'end_user': job_doc.get('end_user', ''),
+                                'receive_date': job_doc.get('receive_date', ''),
+                                'received_by': job_doc.get('received_by', ''),
+                                'remarks': job_doc.get('remarks', '')
+                            }
+                            
+                            # Get client information
+                            client_name = 'Unknown'
+                            try:
+                                clients_collection = db.clients
+                                client_obj_id = job_doc.get('client_id')
+                                if client_obj_id:
+                                    if isinstance(client_obj_id, str):
+                                        client_obj_id = ObjectId(client_obj_id)
+                                    client_doc = clients_collection.find_one({'_id': client_obj_id})
+                                    if client_doc:
+                                        client_name = client_doc.get('client_name', 'Unknown')
+                            except Exception:
+                                pass
+                            
+                            # Get test method information
+                            test_method_info = {
+                                'test_method_oid': str(sample_lot.get('test_method_oid', '')),
+                                'test_name': 'Unknown Method',
+                                'test_description': 'Unknown'
+                            }
+                            try:
+                                test_methods_collection = db.test_methods
+                                test_method_doc = test_methods_collection.find_one({'_id': ObjectId(sample_lot.get('test_method_oid'))})
+                                if test_method_doc:
+                                    test_method_info.update({
+                                        'test_name': test_method_doc.get('test_name', 'Unknown Method'),
+                                        'test_description': test_method_doc.get('test_description', 'Unknown'),
+                                        'test_columns': test_method_doc.get('test_columns', []),
+                                        'hasImage': test_method_doc.get('hasImage', False)
+                                    })
+                            except Exception:
+                                pass
+                            
+                            # Get specimens information for this sample lot
+                            sample_lot_specimens = []
+                            for specimen_oid in sample_lot.get('specimen_oids', []):
+                                specimen_info = {
+                                    'specimen_oid': str(specimen_oid),
+                                    'specimen_id': 'Unknown',
+                                    'created_at': '',
+                                    'updated_at': ''
+                                }
+                                try:
+                                    specimens_collection = db.specimens
+                                    specimen_doc = specimens_collection.find_one({'_id': ObjectId(specimen_oid)})
+                                    if specimen_doc:
+                                        specimen_info.update({
+                                            'specimen_id': specimen_doc.get('specimen_id', 'Unknown'),
+                                            'created_at': specimen_doc.get('created_at').isoformat() if specimen_doc.get('created_at') else '',
+                                            'updated_at': specimen_doc.get('updated_at').isoformat() if specimen_doc.get('updated_at') else ''
+                                        })
+                                except Exception:
+                                    pass
+                                
+                                sample_lot_specimens.append(specimen_info)
+                            
+                            sample_lots_data.append({
+                                'item_description': sample_lot.get('item_description', ''),
+                                'planned_test_date': sample_lot.get('planned_test_date'),
+                                'dimension_spec': sample_lot.get('dimension_spec'),
+                                'request_by': sample_lot.get('request_by'),
+                                'remarks': sample_lot.get('remarks'),
+                                'sample_lot_info': {
+                                    'sample_lot_id': str(sample_lot_id),
+                                    'item_no': sample_lot_doc.get('item_no', 'Unknown'),
+                                    'sample_type': sample_lot_doc.get('sample_type', 'Unknown'),
+                                    'material_type': sample_lot_doc.get('material_type', 'Unknown'),
+                                    'description': sample_lot_doc.get('description', 'Unknown'),
+                                    'job_id': job_info['job_id'],
+                                    'client_name': client_name
+                                },
+                                'test_method': test_method_info,
+                                'specimens': sample_lot_specimens,
+                                'specimens_count': len(sample_lot_specimens)
+                            })
+                    except Exception:
+                        pass
+            
+            # Only include this sample preparation if it has sample lots from the specified job
+            if has_job_sample_lots:
+                data.append({
+                    'id': str(prep_doc.get('_id', '')),
+                    'request_no': prep_doc.get('request_no', ''),
+                    'sample_lots': sample_lots_data,
+                    'sample_lots_count': len(sample_lots_data),
+                    'total_specimens': sum(len(lot.get('specimens', [])) for lot in sample_lots_data),
+                    'created_at': prep_doc.get('created_at').isoformat() if prep_doc.get('created_at') else '',
+                    'updated_at': prep_doc.get('updated_at').isoformat() if prep_doc.get('updated_at') else ''
+                })
+        
+        return JsonResponse({
+            'status': 'success',
+            'data': data,
+            'total': len(data),
+            'job_oid': job_oid,
+            'job_id': job_doc.get('job_id', ''),
+            'project_name': job_doc.get('project_name', ''),
+            'client_name': client_name
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
