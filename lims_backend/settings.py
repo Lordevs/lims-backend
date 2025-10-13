@@ -65,7 +65,13 @@ INSTALLED_APPS = [
     'certificateitems',
     'labequipment',
     'proficiencytesting',
-    'calibrationtesting'
+    'calibrationtesting',
+    'welders',
+    'weldercertificates',
+    'welderperformancerecords',
+    'weldercards',
+    'testingreports',
+    'pqrs'
    
 ]
 
@@ -286,6 +292,36 @@ LOGGING = {
             'propagate': False,
         },
         'calibrationtesting': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'welders': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'weldercertificates': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'welderperformancerecords': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'weldercards': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'testingreports': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'pqrs': {
             'handlers': ['file', 'console'],
             'level': 'INFO',
             'propagate': False,

@@ -33,6 +33,12 @@ urlpatterns = [
     path('api/equipment/', include('labequipment.urls')),
     path('api/proficiency-tests/', include('proficiencytesting.urls')),
     path('api/calibration-tests/', include('calibrationtesting.urls')),
+    path('api/welders/', include('welders.urls')),
+    path('api/welder-certificates/', include('weldercertificates.urls')),
+    path('api/welder-performance-records/', include('welderperformancerecords.urls')),
+    path('api/welder-cards/', include('weldercards.urls')),
+    path('api/testing-reports/', include('testingreports.urls')),
+    path('api/pqrs/', include('pqrs.urls')),
 ]
 
 # Serve media files in development
