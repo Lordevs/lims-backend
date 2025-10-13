@@ -34,6 +34,10 @@ def pqr_list(request):
             lab_test_no_search = request.GET.get('lab_test_no', '')
             type_search = request.GET.get('type', '')
             
+            # Get filtering parameters
+            show_inactive = request.GET.get('show_inactive', '').lower() == 'true'
+            include_inactive = request.GET.get('include_inactive', '').lower() == 'true'
+            
             # Use raw query to get all active PQRs
             db = connection.get_db()
             pqrs_collection = db.pqrs
@@ -46,6 +50,17 @@ def pqr_list(request):
                 query['lab_test_no'] = {'$regex': lab_test_no_search, '$options': 'i'}
             if type_search:
                 query['type'] = {'$regex': type_search, '$options': 'i'}
+            
+            # Add filtering based on is_active status
+            if show_inactive:
+                # Only show inactive PQRs
+                query['is_active'] = False
+            elif include_inactive:
+                # Show both active and inactive PQRs (no filter)
+                pass
+            else:
+                # Default: only show active PQRs
+                query['is_active'] = True
             
             # Get total count for pagination
             total_records = pqrs_collection.count_documents(query)
@@ -414,12 +429,18 @@ def pqr_detail(request, object_id):
                 }, status=400)
         
         elif request.method == 'DELETE':
-            # Delete the document completely
-            result = pqrs_collection.delete_one(
-                {'_id': obj_id}
+            # Soft delete: set is_active to false instead of hard delete
+            result = pqrs_collection.update_one(
+                {'_id': obj_id},
+                {
+                    '$set': {
+                        'is_active': False,
+                        'updated_at': datetime.now()
+                    }
+                }
             )
             
-            if result.deleted_count == 0:
+            if result.matched_count == 0:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'PQR not found'
@@ -427,11 +448,12 @@ def pqr_detail(request, object_id):
             
             return JsonResponse({
                 'status': 'success',
-                'message': 'PQR deleted successfully',
+                'message': 'PQR deactivated successfully',
                 'data': {
                     'id': str(obj_id),
-                    'lab_test_no': pqr_doc.get('lab_test_no', ''),
-                    'deleted_at': datetime.now().isoformat()
+                    'pqr_id': pqr_doc.get('pqr_id', ''),
+                    'is_active': False,
+                    'deactivated_at': datetime.now().isoformat()
                 }
             })
             

@@ -34,6 +34,10 @@ def welder_certificate_list(request):
             tested_by_search = request.GET.get('tested_by', '')
             date_of_test_search = request.GET.get('date_of_test', '')
             
+            # Get filtering parameters
+            show_inactive = request.GET.get('show_inactive', '').lower() == 'true'
+            include_inactive = request.GET.get('include_inactive', '').lower() == 'true'
+            
             # Use raw query to get all active certificates
             db = connection.get_db()
             certificates_collection = db.welder_certificates
@@ -46,6 +50,17 @@ def welder_certificate_list(request):
                 query['tested_by'] = {'$regex': tested_by_search, '$options': 'i'}
             if date_of_test_search:
                 query['date_of_test'] = date_of_test_search
+            
+            # Add filtering based on is_active status
+            if show_inactive:
+                # Only show inactive certificates
+                query['is_active'] = False
+            elif include_inactive:
+                # Show both active and inactive certificates (no filter)
+                pass
+            else:
+                # Default: only show active certificates
+                query['is_active'] = True
             
             # Get total count for pagination
             total_records = certificates_collection.count_documents(query)
@@ -414,12 +429,18 @@ def welder_certificate_detail(request, object_id):
                 }, status=400)
         
         elif request.method == 'DELETE':
-            # Delete the document completely
-            result = certificates_collection.delete_one(
-                {'_id': obj_id}
+            # Soft delete: set is_active to false instead of hard delete
+            result = certificates_collection.update_one(
+                {'_id': obj_id},
+                {
+                    '$set': {
+                        'is_active': False,
+                        'updated_at': datetime.now()
+                    }
+                }
             )
             
-            if result.deleted_count == 0:
+            if result.matched_count == 0:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Welder certificate not found'
@@ -427,11 +448,12 @@ def welder_certificate_detail(request, object_id):
             
             return JsonResponse({
                 'status': 'success',
-                'message': 'Welder certificate deleted successfully',
+                'message': 'Welder certificate deactivated successfully',
                 'data': {
                     'id': str(obj_id),
-                    'law_name': cert_doc.get('law_name', ''),
-                    'deleted_at': datetime.now().isoformat()
+                    'certificate_id': cert_doc.get('certificate_id', ''),
+                    'is_active': False,
+                    'deactivated_at': datetime.now().isoformat()
                 }
             })
             

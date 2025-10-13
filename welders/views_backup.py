@@ -110,21 +110,8 @@ def welder_list(request):
             # Get pagination parameters
             page, limit, offset = get_pagination_params(request)
             
-            # Get filtering parameters
-            show_inactive = request.GET.get('show_inactive', '').lower() == 'true'
-            include_inactive = request.GET.get('include_inactive', '').lower() == 'true'
-            
-            # Build query based on filtering parameters
-            if show_inactive:
-                # Only show inactive welders
-                welders_queryset = Welder.objects.filter(is_active=False).order_by('-updated_at')
-            elif include_inactive:
-                # Show both active and inactive welders
-                welders_queryset = Welder.objects.all().order_by('-created_at')
-            else:
-                # Default: only show active welders
-                welders_queryset = Welder.objects.filter(is_active=True).order_by('-created_at')
-            
+            # Get welders with pagination
+            welders_queryset = Welder.objects.all().order_by('-created_at')
             paginated_welders, total_records = paginate_queryset(welders_queryset, page, limit)
             
             data = []
@@ -484,6 +471,52 @@ def welder_detail(request, object_id):
 @csrf_exempt
 @require_http_methods(["GET"])
 @any_authenticated_user
+def welder_deleted(request):
+    """
+    Get all deleted (inactive) welders
+    """
+    try:
+        # Get pagination parameters
+        page, limit = get_pagination_params(request)
+        
+        # Fetch deleted welders with pagination
+        deleted_welders_queryset = Welder.objects.filter(is_active=False).order_by('-updated_at')
+        paginated_welders, total_records = paginate_queryset(deleted_welders_queryset, page, limit)
+        
+        data = []
+        for welder in paginated_welders:
+            data.append({
+                'id': str(welder.id),
+                'operator_name': welder.operator_name,
+                'operator_id': welder.operator_id,
+                'iqama': welder.iqama,
+                'profile_image': welder.profile_image,
+                'profile_image_url': f"{settings.MEDIA_URL}{welder.profile_image}" if welder.profile_image else None,
+                'is_active': welder.is_active,
+                'created_at': welder.created_at.isoformat(),
+                'updated_at': welder.updated_at.isoformat(),
+                'deactivated_at': welder.updated_at.isoformat()
+            })
+        
+        # Create paginated response
+        response_data = create_pagination_response(data, total_records, page, limit)
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Deleted welders retrieved successfully',
+            'data': response_data
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@any_authenticated_user
 def welder_search(request):
     """
     Search welders by various criteria
@@ -545,6 +578,52 @@ def welder_search(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 @any_authenticated_user
+def welder_deleted(request):
+    """
+    Get all deleted (inactive) welders
+    """
+    try:
+        # Get pagination parameters
+        page, limit = get_pagination_params(request)
+        
+        # Fetch deleted welders with pagination
+        deleted_welders_queryset = Welder.objects.filter(is_active=False).order_by('-updated_at')
+        paginated_welders, total_records = paginate_queryset(deleted_welders_queryset, page, limit)
+        
+        data = []
+        for welder in paginated_welders:
+            data.append({
+                'id': str(welder.id),
+                'operator_name': welder.operator_name,
+                'operator_id': welder.operator_id,
+                'iqama': welder.iqama,
+                'profile_image': welder.profile_image,
+                'profile_image_url': f"{settings.MEDIA_URL}{welder.profile_image}" if welder.profile_image else None,
+                'is_active': welder.is_active,
+                'created_at': welder.created_at.isoformat(),
+                'updated_at': welder.updated_at.isoformat(),
+                'deactivated_at': welder.updated_at.isoformat()
+            })
+        
+        # Create paginated response
+        response_data = create_pagination_response(data, total_records, page, limit)
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Deleted welders retrieved successfully',
+            'data': response_data
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@any_authenticated_user
 def welder_stats(request):
     """
     Get welder statistics
@@ -562,6 +641,52 @@ def welder_stats(request):
                 'inactive_welders': inactive_welders,
                 'activity_rate': round((active_welders / total_welders * 100), 2) if total_welders > 0 else 0
             }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@any_authenticated_user
+def welder_deleted(request):
+    """
+    Get all deleted (inactive) welders
+    """
+    try:
+        # Get pagination parameters
+        page, limit = get_pagination_params(request)
+        
+        # Fetch deleted welders with pagination
+        deleted_welders_queryset = Welder.objects.filter(is_active=False).order_by('-updated_at')
+        paginated_welders, total_records = paginate_queryset(deleted_welders_queryset, page, limit)
+        
+        data = []
+        for welder in paginated_welders:
+            data.append({
+                'id': str(welder.id),
+                'operator_name': welder.operator_name,
+                'operator_id': welder.operator_id,
+                'iqama': welder.iqama,
+                'profile_image': welder.profile_image,
+                'profile_image_url': f"{settings.MEDIA_URL}{welder.profile_image}" if welder.profile_image else None,
+                'is_active': welder.is_active,
+                'created_at': welder.created_at.isoformat(),
+                'updated_at': welder.updated_at.isoformat(),
+                'deactivated_at': welder.updated_at.isoformat()
+            })
+        
+        # Create paginated response
+        response_data = create_pagination_response(data, total_records, page, limit)
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Deleted welders retrieved successfully',
+            'data': response_data
         })
         
     except Exception as e:
@@ -668,6 +793,52 @@ def welder_image_management(request, object_id):
             'status': 'error',
             'message': 'Welder not found'
         }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@any_authenticated_user
+def welder_deleted(request):
+    """
+    Get all deleted (inactive) welders
+    """
+    try:
+        # Get pagination parameters
+        page, limit = get_pagination_params(request)
+        
+        # Fetch deleted welders with pagination
+        deleted_welders_queryset = Welder.objects.filter(is_active=False).order_by('-updated_at')
+        paginated_welders, total_records = paginate_queryset(deleted_welders_queryset, page, limit)
+        
+        data = []
+        for welder in paginated_welders:
+            data.append({
+                'id': str(welder.id),
+                'operator_name': welder.operator_name,
+                'operator_id': welder.operator_id,
+                'iqama': welder.iqama,
+                'profile_image': welder.profile_image,
+                'profile_image_url': f"{settings.MEDIA_URL}{welder.profile_image}" if welder.profile_image else None,
+                'is_active': welder.is_active,
+                'created_at': welder.created_at.isoformat(),
+                'updated_at': welder.updated_at.isoformat(),
+                'deactivated_at': welder.updated_at.isoformat()
+            })
+        
+        # Create paginated response
+        response_data = create_pagination_response(data, total_records, page, limit)
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Deleted welders retrieved successfully',
+            'data': response_data
+        })
+        
     except Exception as e:
         return JsonResponse({
             'status': 'error',

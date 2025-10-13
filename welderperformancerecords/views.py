@@ -34,6 +34,10 @@ def welder_performance_record_list(request):
             tested_by_search = request.GET.get('tested_by', '')
             date_of_welding_search = request.GET.get('date_of_welding', '')
             
+            # Get filtering parameters
+            show_inactive = request.GET.get('show_inactive', '').lower() == 'true'
+            include_inactive = request.GET.get('include_inactive', '').lower() == 'true'
+            
             # Use raw query to get all active performance records
             db = connection.get_db()
             performance_records_collection = db.welder_performance_records
@@ -46,6 +50,17 @@ def welder_performance_record_list(request):
                 query['tested_by'] = {'$regex': tested_by_search, '$options': 'i'}
             if date_of_welding_search:
                 query['date_of_welding'] = date_of_welding_search
+            
+            # Add filtering based on is_active status
+            if show_inactive:
+                # Only show inactive performance records
+                query['is_active'] = False
+            elif include_inactive:
+                # Show both active and inactive performance records (no filter)
+                pass
+            else:
+                # Default: only show active performance records
+                query['is_active'] = True
             
             # Get total count for pagination
             total_records = performance_records_collection.count_documents(query)
@@ -415,12 +430,18 @@ def welder_performance_record_detail(request, object_id):
                 }, status=400)
         
         elif request.method == 'DELETE':
-            # Delete the document completely
-            result = performance_records_collection.delete_one(
-                {'_id': obj_id}
+            # Soft delete: set is_active to false instead of hard delete
+            result = performance_records_collection.update_one(
+                {'_id': obj_id},
+                {
+                    '$set': {
+                        'is_active': False,
+                        'updated_at': datetime.now()
+                    }
+                }
             )
             
-            if result.deleted_count == 0:
+            if result.matched_count == 0:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Welder performance record not found'
@@ -428,11 +449,12 @@ def welder_performance_record_detail(request, object_id):
             
             return JsonResponse({
                 'status': 'success',
-                'message': 'Welder performance record deleted successfully',
+                'message': 'Welder performance record deactivated successfully',
                 'data': {
                     'id': str(obj_id),
-                    'law_name': record_doc.get('law_name', ''),
-                    'deleted_at': datetime.now().isoformat()
+                    'record_id': record_doc.get('record_id', ''),
+                    'is_active': False,
+                    'deactivated_at': datetime.now().isoformat()
                 }
             })
             

@@ -32,6 +32,10 @@ def testing_report_list(request):
             prepared_by_search = request.GET.get('prepared_by', '')
             welder_name_search = request.GET.get('welder_name', '')
             
+            # Get filtering parameters
+            show_inactive = request.GET.get('show_inactive', '').lower() == 'true'
+            include_inactive = request.GET.get('include_inactive', '').lower() == 'true'
+            
             # Use raw query to get all active testing reports
             db = connection.get_db()
             testing_reports_collection = db.testing_reports
@@ -44,6 +48,17 @@ def testing_report_list(request):
                 query['prepared_by'] = {'$regex': prepared_by_search, '$options': 'i'}
             if welder_name_search:
                 query['results.welder_name'] = {'$regex': welder_name_search, '$options': 'i'}
+            
+            # Add filtering based on is_active status
+            if show_inactive:
+                # Only show inactive testing reports
+                query['is_active'] = False
+            elif include_inactive:
+                # Show both active and inactive testing reports (no filter)
+                pass
+            else:
+                # Default: only show active testing reports
+                query['is_active'] = True
             
             # Get total count for pagination
             total_records = testing_reports_collection.count_documents(query)
@@ -364,12 +379,18 @@ def testing_report_detail(request, object_id):
                 }, status=400)
         
         elif request.method == 'DELETE':
-            # Delete the document completely
-            result = testing_reports_collection.delete_one(
-                {'_id': obj_id}
+            # Soft delete: set is_active to false instead of hard delete
+            result = testing_reports_collection.update_one(
+                {'_id': obj_id},
+                {
+                    '$set': {
+                        'is_active': False,
+                        'updated_at': datetime.now()
+                    }
+                }
             )
             
-            if result.deleted_count == 0:
+            if result.matched_count == 0:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Testing report not found'
@@ -377,11 +398,12 @@ def testing_report_detail(request, object_id):
             
             return JsonResponse({
                 'status': 'success',
-                'message': 'Testing report deleted successfully',
+                'message': 'Testing report deactivated successfully',
                 'data': {
                     'id': str(obj_id),
-                    'client_name': report_doc.get('client_name', ''),
-                    'deleted_at': datetime.now().isoformat()
+                    'report_no': report_doc.get('report_no', ''),
+                    'is_active': False,
+                    'deactivated_at': datetime.now().isoformat()
                 }
             })
             

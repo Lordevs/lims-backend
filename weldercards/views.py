@@ -32,6 +32,10 @@ def welder_card_list(request):
             company_search = request.GET.get('company', '')
             welder_name_search = request.GET.get('welder_name', '')
             
+            # Get filtering parameters
+            show_inactive = request.GET.get('show_inactive', '').lower() == 'true'
+            include_inactive = request.GET.get('include_inactive', '').lower() == 'true'
+            
             # Use raw query to avoid field validation issues with existing data
             db = connection.get_db()
             welder_cards_collection = db.welder_cards
@@ -60,6 +64,17 @@ def welder_card_list(request):
                 except Exception:
                     # If there's an error, return empty result
                     query['welder_id'] = {'$in': []}
+            
+            # Add filtering based on is_active status
+            if show_inactive:
+                # Only show inactive welder cards
+                query['is_active'] = False
+            elif include_inactive:
+                # Show both active and inactive welder cards (no filter)
+                pass
+            else:
+                # Default: only show active welder cards
+                query['is_active'] = True
             
             # Get total count for pagination
             total_records = welder_cards_collection.count_documents(query)
@@ -336,12 +351,18 @@ def welder_card_detail(request, object_id):
                 }, status=400)
         
         elif request.method == 'DELETE':
-            # Delete the document completely
-            result = welder_cards_collection.delete_one(
-                {'_id': object_id}
+            # Soft delete: set is_active to false instead of hard delete
+            result = welder_cards_collection.update_one(
+                {'_id': object_id},
+                {
+                    '$set': {
+                        'is_active': False,
+                        'updated_at': datetime.now()
+                    }
+                }
             )
             
-            if result.deleted_count == 0:
+            if result.matched_count == 0:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Welder card not found'
@@ -349,11 +370,12 @@ def welder_card_detail(request, object_id):
             
             return JsonResponse({
                 'status': 'success',
-                'message': 'Welder card deleted successfully',
+                'message': 'Welder card deactivated successfully',
                 'data': {
                     'id': str(object_id),
                     'card_no': card_doc.get('card_no', ''),
-                    'deleted_at': datetime.now().isoformat()
+                    'is_active': False,
+                    'deactivated_at': datetime.now().isoformat()
                 }
             })
             
