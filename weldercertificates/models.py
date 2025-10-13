@@ -13,6 +13,15 @@ class TestResult(EmbeddedDocument):
     report_no = fields.StringField(max_length=100)
 
 
+class TestingVariable(EmbeddedDocument):
+    """
+    Embedded document for testing variables and qualification limits
+    """
+    name = fields.StringField(max_length=200, required=True)
+    actual_values = fields.StringField(max_length=200, required=True)
+    range_values = fields.StringField(max_length=200, required=True)
+
+
 class WelderCertificate(Document):
     """
     Welder operator qualification certificate model
@@ -24,7 +33,7 @@ class WelderCertificate(Document):
     base_metal_specification = fields.StringField(max_length=200)
     joint_type = fields.StringField(max_length=100)
     weld_type = fields.StringField(max_length=100)
-    testing_variables_and_qualification_limits = fields.DictField()  # JSON field
+    testing_variables_and_qualification_limits = fields.ListField(fields.EmbeddedDocumentField(TestingVariable))  # Array of testing variables
     tests = fields.ListField(fields.EmbeddedDocumentField(TestResult), required=True)
     law_name = fields.StringField(max_length=200, required=True)
     tested_by = fields.StringField(max_length=100, required=True)

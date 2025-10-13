@@ -13,6 +13,15 @@ class PerformanceTestResult(EmbeddedDocument):
     report_no = fields.StringField(max_length=100)
 
 
+class PerformanceTestingVariable(EmbeddedDocument):
+    """
+    Embedded document for testing variables and qualification limits in performance records
+    """
+    name = fields.StringField(max_length=200, required=True)
+    actual_values = fields.StringField(max_length=200, required=True)
+    range_values = fields.StringField(max_length=200, required=True)
+
+
 class WelderPerformanceRecord(Document):
     """
     Welder operator performance qualification record model
@@ -28,7 +37,8 @@ class WelderPerformanceRecord(Document):
     filler_class_aws = fields.StringField(max_length=100)
     test_coupon_size = fields.StringField(max_length=200)
     positions = fields.StringField(max_length=200)
-    testing_variables_and_qualification_limits = fields.DictField()  # JSON field
+    testing_variables_and_qualification_limits_automatic = fields.ListField(fields.EmbeddedDocumentField(PerformanceTestingVariable))  # Array of automatic testing variables
+    testing_variables_and_qualification_limits_machine = fields.ListField(fields.EmbeddedDocumentField(PerformanceTestingVariable))  # Array of machine testing variables
     tests = fields.ListField(fields.EmbeddedDocumentField(PerformanceTestResult), required=True)
     law_name = fields.StringField(max_length=200, required=True)
     tested_by = fields.StringField(max_length=100, required=True)

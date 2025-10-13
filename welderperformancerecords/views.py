@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -8,7 +9,7 @@ from bson import ObjectId
 from mongoengine import connection
 from mongoengine.errors import DoesNotExist, ValidationError
 
-from .models import WelderPerformanceRecord, PerformanceTestResult
+from .models import WelderPerformanceRecord, PerformanceTestResult, PerformanceTestingVariable
 from weldercards.models import WelderCard
 from welders.models import Welder
 from authentication.decorators import any_authenticated_user, welding_operations_required
@@ -128,7 +129,8 @@ def welder_performance_record_list(request):
                     'filler_class_aws': record_doc.get('filler_class_aws', ''),
                     'test_coupon_size': record_doc.get('test_coupon_size', ''),
                     'positions': record_doc.get('positions', ''),
-                    'testing_variables_and_qualification_limits': record_doc.get('testing_variables_and_qualification_limits', {}),
+                    'testing_variables_and_qualification_limits_automatic': record_doc.get('testing_variables_and_qualification_limits_automatic', []),
+                    'testing_variables_and_qualification_limits_machine': record_doc.get('testing_variables_and_qualification_limits_machine', []),
                     'tests': record_doc.get('tests', []),
                     'law_name': record_doc.get('law_name', ''),
                     'tested_by': record_doc.get('tested_by', ''),
@@ -184,6 +186,26 @@ def welder_performance_record_list(request):
                 )
                 tests_list.append(test_result)
             
+            # Process automatic testing variables array
+            testing_variables_automatic_list = []
+            for var_data in data.get('testing_variables_and_qualification_limits_automatic', []):
+                testing_variable = PerformanceTestingVariable(
+                    name=var_data.get('name', ''),
+                    actual_values=var_data.get('actual_values', ''),
+                    range_values=var_data.get('range_values', '')
+                )
+                testing_variables_automatic_list.append(testing_variable)
+            
+            # Process machine testing variables array
+            testing_variables_machine_list = []
+            for var_data in data.get('testing_variables_and_qualification_limits_machine', []):
+                testing_variable = PerformanceTestingVariable(
+                    name=var_data.get('name', ''),
+                    actual_values=var_data.get('actual_values', ''),
+                    range_values=var_data.get('range_values', '')
+                )
+                testing_variables_machine_list.append(testing_variable)
+            
             performance_record = WelderPerformanceRecord(
                 welder_card_id=ObjectId(data['welder_card_id']),
                 wps_followed_date=data.get('wps_followed_date', ''),
@@ -196,7 +218,8 @@ def welder_performance_record_list(request):
                 filler_class_aws=data.get('filler_class_aws', ''),
                 test_coupon_size=data.get('test_coupon_size', ''),
                 positions=data.get('positions', ''),
-                testing_variables_and_qualification_limits=data.get('testing_variables_and_qualification_limits', {}),
+                testing_variables_and_qualification_limits_automatic=testing_variables_automatic_list,
+                testing_variables_and_qualification_limits_machine=testing_variables_machine_list,
                 tests=tests_list,
                 law_name=data['law_name'],
                 tested_by=data['tested_by'],
@@ -307,7 +330,7 @@ def welder_performance_record_detail(request, object_id):
                                     'operator_name': welder_doc.get('operator_name', 'Unknown Welder'),
                                     'operator_id': welder_doc.get('operator_id', ''),
                                     'iqama': welder_doc.get('iqama', ''),
-                                    'profile_image': welder_doc.get('profile_image', '')
+                                     'profile_image': f"{settings.MEDIA_URL}{welder_doc.get('profile_image', '')}" if welder_doc.get('profile_image', '') else None
                                 }
             except Exception:
                 pass
@@ -328,6 +351,9 @@ def welder_performance_record_detail(request, object_id):
                     'filler_class_aws': record_doc.get('filler_class_aws', ''),
                     'test_coupon_size': record_doc.get('test_coupon_size', ''),
                     'positions': record_doc.get('positions', ''),
+                    'testing_variables_and_qualification_limits_automatic': record_doc.get('testing_variables_and_qualification_limits_automatic', []),
+                    'testing_variables_and_qualification_limits_machine': record_doc.get('testing_variables_and_qualification_limits_machine', []),
+                    # Legacy field for backward compatibility
                     'testing_variables_and_qualification_limits': record_doc.get('testing_variables_and_qualification_limits', {}),
                     'tests': record_doc.get('tests', []),
                     'law_name': record_doc.get('law_name', ''),
@@ -361,8 +387,8 @@ def welder_performance_record_detail(request, object_id):
                 update_fields = [
                     'wps_followed_date', 'date_of_issue', 'date_of_welding', 'joint_weld_type',
                     'base_metal_spec', 'base_metal_p_no', 'filler_sfa_spec', 'filler_class_aws',
-                    'test_coupon_size', 'positions', 'testing_variables_and_qualification_limits',
-                    'law_name', 'tested_by', 'witnessed_by', 'is_active'
+                    'test_coupon_size', 'positions', 'testing_variables_and_qualification_limits_automatic',
+                    'testing_variables_and_qualification_limits_machine', 'law_name', 'tested_by', 'witnessed_by', 'is_active'
                 ]
                 
                 for field in update_fields:
@@ -381,6 +407,30 @@ def welder_performance_record_detail(request, object_id):
                         }
                         tests_list.append(test_result)
                     update_doc['tests'] = tests_list
+                
+                # Handle automatic testing variables array update
+                if 'testing_variables_and_qualification_limits_automatic' in data:
+                    testing_variables_automatic_list = []
+                    for var_data in data['testing_variables_and_qualification_limits_automatic']:
+                        testing_variable = {
+                            'name': var_data.get('name', ''),
+                            'actual_values': var_data.get('actual_values', ''),
+                            'range_values': var_data.get('range_values', '')
+                        }
+                        testing_variables_automatic_list.append(testing_variable)
+                    update_doc['testing_variables_and_qualification_limits_automatic'] = testing_variables_automatic_list
+                
+                # Handle machine testing variables array update
+                if 'testing_variables_and_qualification_limits_machine' in data:
+                    testing_variables_machine_list = []
+                    for var_data in data['testing_variables_and_qualification_limits_machine']:
+                        testing_variable = {
+                            'name': var_data.get('name', ''),
+                            'actual_values': var_data.get('actual_values', ''),
+                            'range_values': var_data.get('range_values', '')
+                        }
+                        testing_variables_machine_list.append(testing_variable)
+                    update_doc['testing_variables_and_qualification_limits_machine'] = testing_variables_machine_list
                 
                 # Check if any fields were provided for update
                 if not update_doc:

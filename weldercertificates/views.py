@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -8,7 +9,7 @@ from bson import ObjectId
 from mongoengine import connection
 from mongoengine.errors import DoesNotExist, ValidationError
 
-from .models import WelderCertificate, TestResult
+from .models import WelderCertificate, TestResult, TestingVariable
 from weldercards.models import WelderCard
 from welders.models import Welder
 from authentication.decorators import any_authenticated_user, welding_operations_required
@@ -124,7 +125,7 @@ def welder_certificate_list(request):
                     'base_metal_specification': cert_doc.get('base_metal_specification', ''),
                     'joint_type': cert_doc.get('joint_type', ''),
                     'weld_type': cert_doc.get('weld_type', ''),
-                    'testing_variables_and_qualification_limits': cert_doc.get('testing_variables_and_qualification_limits', {}),
+                    'testing_variables_and_qualification_limits': cert_doc.get('testing_variables_and_qualification_limits', []),
                     'tests': cert_doc.get('tests', []),
                     'law_name': cert_doc.get('law_name', ''),
                     'tested_by': cert_doc.get('tested_by', ''),
@@ -180,6 +181,16 @@ def welder_certificate_list(request):
                 )
                 tests_list.append(test_result)
             
+            # Process testing variables array
+            testing_variables_list = []
+            for var_data in data.get('testing_variables_and_qualification_limits', []):
+                testing_variable = TestingVariable(
+                    name=var_data.get('name', ''),
+                    actual_values=var_data.get('actual_values', ''),
+                    range_values=var_data.get('range_values', '')
+                )
+                testing_variables_list.append(testing_variable)
+            
             certificate = WelderCertificate(
                 welder_card_id=ObjectId(data['welder_card_id']),
                 date_of_test=data.get('date_of_test', ''),
@@ -188,7 +199,7 @@ def welder_certificate_list(request):
                 base_metal_specification=data.get('base_metal_specification', ''),
                 joint_type=data.get('joint_type', ''),
                 weld_type=data.get('weld_type', ''),
-                testing_variables_and_qualification_limits=data.get('testing_variables_and_qualification_limits', {}),
+                testing_variables_and_qualification_limits=testing_variables_list,
                 tests=tests_list,
                 law_name=data['law_name'],
                 tested_by=data['tested_by'],
@@ -299,7 +310,7 @@ def welder_certificate_detail(request, object_id):
                                     'operator_name': welder_doc.get('operator_name', 'Unknown Welder'),
                                     'operator_id': welder_doc.get('operator_id', ''),
                                     'iqama': welder_doc.get('iqama', ''),
-                                    'profile_image': welder_doc.get('profile_image', '')
+                                     'profile_image': f"{settings.MEDIA_URL}{welder_doc.get('profile_image', '')}" if welder_doc.get('profile_image', '') else None
                                 }
             except Exception:
                 pass
@@ -316,7 +327,7 @@ def welder_certificate_detail(request, object_id):
                     'base_metal_specification': cert_doc.get('base_metal_specification', ''),
                     'joint_type': cert_doc.get('joint_type', ''),
                     'weld_type': cert_doc.get('weld_type', ''),
-                    'testing_variables_and_qualification_limits': cert_doc.get('testing_variables_and_qualification_limits', {}),
+                    'testing_variables_and_qualification_limits': cert_doc.get('testing_variables_and_qualification_limits', []),
                     'tests': cert_doc.get('tests', []),
                     'law_name': cert_doc.get('law_name', ''),
                     'tested_by': cert_doc.get('tested_by', ''),
@@ -359,7 +370,16 @@ def welder_certificate_detail(request, object_id):
                 if 'weld_type' in data:
                     update_doc['weld_type'] = data['weld_type']
                 if 'testing_variables_and_qualification_limits' in data:
-                    update_doc['testing_variables_and_qualification_limits'] = data['testing_variables_and_qualification_limits']
+                    # Process testing variables array
+                    testing_variables_list = []
+                    for var_data in data['testing_variables_and_qualification_limits']:
+                        testing_variable = {
+                            'name': var_data.get('name', ''),
+                            'actual_values': var_data.get('actual_values', ''),
+                            'range_values': var_data.get('range_values', '')
+                        }
+                        testing_variables_list.append(testing_variable)
+                    update_doc['testing_variables_and_qualification_limits'] = testing_variables_list
                 if 'tests' in data:
                     # Process tests array
                     tests_list = []

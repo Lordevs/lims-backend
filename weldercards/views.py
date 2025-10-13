@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -96,12 +97,12 @@ def welder_card_list(request):
                             welder_obj_id = ObjectId(welder_obj_id)
                         welder_doc = welders_collection.find_one({'_id': welder_obj_id})
                         if welder_doc:
-                            welder_name = welder_doc.get('operator_name', 'Unknown Welder')
                             welder_info = {
                                 'welder_id': str(welder_doc.get('_id', '')),
                                 'operator_name': welder_doc.get('operator_name', ''),
                                 'operator_id': welder_doc.get('operator_id', ''),
-                                'iqama': welder_doc.get('iqama', '')
+                                'iqama': welder_doc.get('iqama', ''),
+                                'profile_image': f"{settings.MEDIA_URL}{welder_doc.get('profile_image', '')}" if welder_doc.get('profile_image', '') else None
                             }
                 except Exception:
                     pass
@@ -240,13 +241,14 @@ def welder_card_detail(request, object_id):
                         welder_obj_id = ObjectId(welder_obj_id)
                     welder_doc = welders_collection.find_one({'_id': welder_obj_id})
                     if welder_doc:
-                        welder_name = welder_doc.get('operator_name', 'Unknown Welder')
                         welder_info = {
                             'welder_id': str(welder_doc.get('_id', '')),
                             'operator_name': welder_doc.get('operator_name', ''),
                             'operator_id': welder_doc.get('operator_id', ''),
                             'iqama': welder_doc.get('iqama', ''),
-                            'profile_image': welder_doc.get('profile_image', '')
+                            # f"{settings.MEDIA_URL}{welder.profile_image}" if welder.profile_image else None
+                            'profile_image': f"{settings.MEDIA_URL}{welder_doc.get('profile_image', '')}" if welder_doc.get('profile_image', '') else None
+                            
                         }
             except Exception:
                 pass
