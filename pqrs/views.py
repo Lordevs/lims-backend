@@ -119,7 +119,7 @@ def pqr_list(request):
                     'type': pqr_doc.get('type', ''),
                     'basic_info': pqr_doc.get('basic_info', {}),
                     'joints': pqr_doc.get('joints', {}),
-                    'joint_design_sketch': pqr_doc.get('joint_design_sketch', ''),
+                    'joint_design_sketch': pqr_doc.get('joint_design_sketch', []),
                     'base_metals': pqr_doc.get('base_metals', {}),
                     'filler_metals': pqr_doc.get('filler_metals', {}),
                     'positions': pqr_doc.get('positions', {}),
@@ -160,7 +160,8 @@ def pqr_list(request):
     
     elif request.method == 'POST':
         try:
-            data = json.loads(request.body)
+            # Extract form data
+            data = request.POST.dict()
             
             # Validate required fields
             required_fields = ['type', 'welder_card_id', 'mechanical_testing_conducted_by', 'lab_test_no', 'law_name']
@@ -180,33 +181,88 @@ def pqr_list(request):
                     'message': f'Welder card not found: {str(e)}'
                 }, status=400)
             
+            # Helper function to parse JSON strings from form data
+            def parse_json_field(field_value):
+                if not field_value:
+                    return {}
+                try:
+                    return json.loads(field_value)
+                except (json.JSONDecodeError, TypeError):
+                    return {}
+            
+            # Parse boolean field
+            is_active = data.get('is_active', 'true').lower() in ['true', '1', 'yes']
+            
+            # Create PQR first without images to get the PQR ID
             pqr = PQR(
                 type=data['type'],
-                basic_info=data.get('basic_info', {}),
-                joints=data.get('joints', {}),
-                joint_design_sketch=data.get('joint_design_sketch', ''),
-                base_metals=data.get('base_metals', {}),
-                filler_metals=data.get('filler_metals', {}),
-                positions=data.get('positions', {}),
-                preheat=data.get('preheat', {}),
-                post_weld_heat_treatment=data.get('post_weld_heat_treatment', {}),
-                gas=data.get('gas', {}),
-                electrical_characteristics=data.get('electrical_characteristics', {}),
-                techniques=data.get('techniques', {}),
-                welding_parameters=data.get('welding_parameters', {}),
-                tensile_test=data.get('tensile_test', {}),
-                guided_bend_test=data.get('guided_bend_test', {}),
-                toughness_test=data.get('toughness_test', {}),
-                fillet_weld_test=data.get('fillet_weld_test', {}),
-                other_tests=data.get('other_tests', {}),
+                basic_info=parse_json_field(data.get('basic_info')),
+                joints=parse_json_field(data.get('joints')),
+                joint_design_sketch=[],  # Will be updated after upload
+                base_metals=parse_json_field(data.get('base_metals')),
+                filler_metals=parse_json_field(data.get('filler_metals')),
+                positions=parse_json_field(data.get('positions')),
+                preheat=parse_json_field(data.get('preheat')),
+                post_weld_heat_treatment=parse_json_field(data.get('post_weld_heat_treatment')),
+                gas=parse_json_field(data.get('gas')),
+                electrical_characteristics=parse_json_field(data.get('electrical_characteristics')),
+                techniques=parse_json_field(data.get('techniques')),
+                welding_parameters=parse_json_field(data.get('welding_parameters')),
+                tensile_test=parse_json_field(data.get('tensile_test')),
+                guided_bend_test=parse_json_field(data.get('guided_bend_test')),
+                toughness_test=parse_json_field(data.get('toughness_test')),
+                fillet_weld_test=parse_json_field(data.get('fillet_weld_test')),
+                other_tests=parse_json_field(data.get('other_tests')),
                 welder_card_id=ObjectId(data['welder_card_id']),
                 mechanical_testing_conducted_by=data['mechanical_testing_conducted_by'],
                 lab_test_no=data['lab_test_no'],
                 law_name=data['law_name'],
-                signatures=data.get('signatures', {}),
-                is_active=data.get('is_active', True)
+                signatures=parse_json_field(data.get('signatures')),
+                is_active=is_active
             )
             pqr.save()
+            
+            # Now handle joint_design_sketch file uploads with PQR ID
+            joint_design_sketch = []
+            if 'joint_design_sketch' in request.FILES:
+                import uuid
+                import os
+                from django.core.files.storage import default_storage
+                from django.core.files.base import ContentFile
+                from django.conf import settings
+                
+                pqr_id = str(pqr.id)
+                uploaded_files = request.FILES.getlist('joint_design_sketch')
+                
+                for uploaded_file in uploaded_files:
+                    if uploaded_file and uploaded_file.size > 0:
+                        # Get file extension
+                        file_extension = os.path.splitext(uploaded_file.name)[1]
+                        
+                        # Generate unique filename with timestamp
+                        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                        unique_filename = f"joint_sketch_{timestamp}_{uuid.uuid4().hex[:8]}{file_extension}"
+                        
+                        # Create directory path using PQR ID
+                        directory_path = f"pqrs/{pqr_id}/"
+                        
+                        # Read file content
+                        uploaded_file.seek(0)
+                        file_content = uploaded_file.read()
+                        
+                        # Save file
+                        file_path = default_storage.save(
+                            f"{directory_path}{unique_filename}",
+                            ContentFile(file_content)
+                        )
+                        
+                        # Store the file path
+                        joint_design_sketch.append(file_path)
+                
+                # Update PQR with image paths
+                if joint_design_sketch:
+                    pqr.joint_design_sketch = joint_design_sketch
+                    pqr.save()
             
             return JsonResponse({
                 'status': 'success',
@@ -215,7 +271,8 @@ def pqr_list(request):
                     'id': str(pqr.id),
                     'type': pqr.type,
                     'lab_test_no': pqr.lab_test_no,
-                    'law_name': pqr.law_name
+                    'law_name': pqr.law_name,
+                    'joint_design_sketch': joint_design_sketch
                 }
             }, status=201)
             
@@ -223,11 +280,6 @@ def pqr_list(request):
             return JsonResponse({
                 'status': 'error',
                 'message': f'Validation error: {str(e)}'
-            }, status=400)
-        except json.JSONDecodeError:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Invalid JSON format'
             }, status=400)
         except Exception as e:
             return JsonResponse({
@@ -322,7 +374,7 @@ def pqr_detail(request, object_id):
                     'type': pqr_doc.get('type', ''),
                     'basic_info': pqr_doc.get('basic_info', {}),
                     'joints': pqr_doc.get('joints', {}),
-                    'joint_design_sketch': pqr_doc.get('joint_design_sketch', ''),
+                    'joint_design_sketch': pqr_doc.get('joint_design_sketch', []),
                     'base_metals': pqr_doc.get('base_metals', {}),
                     'filler_metals': pqr_doc.get('filler_metals', {}),
                     'positions': pqr_doc.get('positions', {}),
@@ -351,7 +403,8 @@ def pqr_detail(request, object_id):
         
         elif request.method == 'PUT':
             try:
-                data = json.loads(request.body)
+                # Extract form data
+                data = request.POST.dict()
                 
                 # Prepare update document
                 update_doc = {}
@@ -367,19 +420,77 @@ def pqr_detail(request, object_id):
                             'message': 'Welder card not found'
                         }, status=404)
                 
+                # Helper function to parse JSON strings from form data
+                def parse_json_field(field_value):
+                    if not field_value:
+                        return {}
+                    try:
+                        return json.loads(field_value)
+                    except (json.JSONDecodeError, TypeError):
+                        return {}
+                
+                # Handle joint_design_sketch file uploads
+                if 'joint_design_sketch' in request.FILES:
+                    import uuid
+                    import os
+                    from django.core.files.storage import default_storage
+                    from django.core.files.base import ContentFile
+                    
+                    joint_design_sketch = []
+                    pqr_id = str(obj_id)
+                    uploaded_files = request.FILES.getlist('joint_design_sketch')
+                    
+                    for uploaded_file in uploaded_files:
+                        if uploaded_file and uploaded_file.size > 0:
+                            # Get file extension
+                            file_extension = os.path.splitext(uploaded_file.name)[1]
+                            
+                            # Generate unique filename with timestamp
+                            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                            unique_filename = f"joint_sketch_{timestamp}_{uuid.uuid4().hex[:8]}{file_extension}"
+                            
+                            # Create directory path using PQR ID
+                            directory_path = f"pqrs/{pqr_id}/"
+                            
+                            # Read file content
+                            uploaded_file.seek(0)
+                            file_content = uploaded_file.read()
+                            
+                            # Save file
+                            file_path = default_storage.save(
+                                f"{directory_path}{unique_filename}",
+                                ContentFile(file_content)
+                            )
+                            
+                            # Store the file path
+                            joint_design_sketch.append(file_path)
+                    
+                    update_doc['joint_design_sketch'] = joint_design_sketch
+                
                 # Update other fields if provided
                 update_fields = [
-                    'type', 'basic_info', 'joints', 'joint_design_sketch', 'base_metals',
-                    'filler_metals', 'positions', 'preheat', 'post_weld_heat_treatment',
-                    'gas', 'electrical_characteristics', 'techniques', 'welding_parameters',
-                    'tensile_test', 'guided_bend_test', 'toughness_test', 'fillet_weld_test',
-                    'other_tests', 'mechanical_testing_conducted_by', 'lab_test_no',
-                    'law_name', 'signatures', 'is_active'
+                    'type', 'mechanical_testing_conducted_by', 'lab_test_no', 'law_name'
                 ]
                 
                 for field in update_fields:
                     if field in data:
                         update_doc[field] = data[field]
+                
+                # Update JSON fields
+                json_fields = [
+                    'basic_info', 'joints', 'base_metals', 'filler_metals', 'positions',
+                    'preheat', 'post_weld_heat_treatment', 'gas', 'electrical_characteristics',
+                    'techniques', 'welding_parameters', 'tensile_test', 'guided_bend_test',
+                    'toughness_test', 'fillet_weld_test', 'other_tests', 'signatures'
+                ]
+                
+                for field in json_fields:
+                    if field in data:
+                        update_doc[field] = parse_json_field(data[field])
+                
+                # Update boolean field
+                if 'is_active' in data:
+                    update_doc['is_active'] = data['is_active'].lower() in ['true', '1', 'yes']
                 
                 # Check if any fields were provided for update
                 if not update_doc:
@@ -413,15 +524,11 @@ def pqr_detail(request, object_id):
                         'id': str(updated_pqr.get('_id', '')),
                         'type': updated_pqr.get('type', ''),
                         'lab_test_no': updated_pqr.get('lab_test_no', ''),
+                        'joint_design_sketch': updated_pqr.get('joint_design_sketch', []),
                         'updated_at': updated_pqr.get('updated_at').isoformat() if updated_pqr.get('updated_at') else ''
                     }
                 })
                 
-            except json.JSONDecodeError:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Invalid JSON format'
-                }, status=400)
             except ValidationError as e:
                 return JsonResponse({
                     'status': 'error',
@@ -429,18 +536,25 @@ def pqr_detail(request, object_id):
                 }, status=400)
         
         elif request.method == 'DELETE':
-            # Soft delete: set is_active to false instead of hard delete
-            result = pqrs_collection.update_one(
-                {'_id': obj_id},
-                {
-                    '$set': {
-                        'is_active': False,
-                        'updated_at': datetime.now()
-                    }
-                }
-            )
+            # Permanently delete the PQR and its image folder
+            import os
+            import shutil
+            from django.conf import settings
             
-            if result.matched_count == 0:
+            # Delete image folder if exists
+            pqr_id = str(obj_id)
+            media_folder_path = os.path.join(settings.MEDIA_ROOT, 'pqrs', pqr_id)
+            if os.path.exists(media_folder_path):
+                try:
+                    shutil.rmtree(media_folder_path)
+                except Exception as e:
+                    # Log error but continue with deletion
+                    pass
+            
+            # Delete the PQR document
+            result = pqrs_collection.delete_one({'_id': obj_id})
+            
+            if result.deleted_count == 0:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'PQR not found'
@@ -448,12 +562,10 @@ def pqr_detail(request, object_id):
             
             return JsonResponse({
                 'status': 'success',
-                'message': 'PQR deactivated successfully',
+                'message': 'PQR permanently deleted successfully',
                 'data': {
                     'id': str(obj_id),
-                    'pqr_id': pqr_doc.get('pqr_id', ''),
-                    'is_active': False,
-                    'deactivated_at': datetime.now().isoformat()
+                    'deleted_at': datetime.now().isoformat()
                 }
             })
             

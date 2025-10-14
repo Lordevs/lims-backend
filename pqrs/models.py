@@ -11,7 +11,7 @@ class PQR(Document):
     type = fields.StringField(max_length=100, required=True)
     basic_info = fields.DictField()  # JSON field for basic information
     joints = fields.DictField()  # JSON field for joints data
-    joint_design_sketch = fields.StringField(max_length=500)  # Path to image file
+    joint_design_sketch = fields.ListField(fields.StringField(max_length=500))  # List of image file paths
     base_metals = fields.DictField()  # JSON field for base metals data
     filler_metals = fields.DictField()  # JSON field for filler metals data
     positions = fields.DictField()  # JSON field for positions data
