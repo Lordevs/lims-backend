@@ -465,7 +465,9 @@ def pqr_detail(request, object_id):
                             # Store the file path
                             joint_design_sketch.append(file_path)
                     
-                    update_doc['joint_design_sketch'] = joint_design_sketch
+                    # If files were uploaded, update the field
+                    if joint_design_sketch:
+                        update_doc['joint_design_sketch'] = joint_design_sketch
                 
                 # Update other fields if provided
                 update_fields = [
@@ -486,7 +488,9 @@ def pqr_detail(request, object_id):
                 
                 for field in json_fields:
                     if field in data:
-                        update_doc[field] = parse_json_field(data[field])
+                        parsed_value = parse_json_field(data[field])
+                        if parsed_value or field in data:  # Include even if empty dict, as long as field was provided
+                            update_doc[field] = parsed_value
                 
                 # Update boolean field
                 if 'is_active' in data:
@@ -496,7 +500,7 @@ def pqr_detail(request, object_id):
                 if not update_doc:
                     return JsonResponse({
                         'status': 'error',
-                        'message': 'No fields provided for update'
+                        'message': 'No fields provided for update. Please provide at least one field to update or upload files.'
                     }, status=400)
                 
                 # Add updated timestamp
@@ -507,12 +511,6 @@ def pqr_detail(request, object_id):
                     {'_id': obj_id},
                     {'$set': update_doc}
                 )
-                
-                if result.modified_count == 0:
-                    return JsonResponse({
-                        'status': 'error',
-                        'message': 'No changes made'
-                    }, status=400)
                 
                 # Get updated PQR document
                 updated_pqr = pqrs_collection.find_one({'_id': obj_id})
