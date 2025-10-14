@@ -272,7 +272,7 @@ def pqr_list(request):
                     'type': pqr.type,
                     'lab_test_no': pqr.lab_test_no,
                     'law_name': pqr.law_name,
-                    'joint_design_sketch': joint_design_sketch
+                    'joint_design_sketch': [f"{settings.MEDIA_URL}{file}" for file in joint_design_sketch]
                 }
             }, status=201)
             
@@ -320,6 +320,8 @@ def pqr_detail(request, object_id):
             }, status=404)
         
         if request.method == 'GET':
+            from django.conf import settings
+            
             # Get welder card and welder information
             welder_card_info = {
                 'card_id': str(pqr_doc.get('welder_card_id', '')),
@@ -362,7 +364,7 @@ def pqr_detail(request, object_id):
                                     'operator_name': welder_doc.get('operator_name', 'Unknown Welder'),
                                     'operator_id': welder_doc.get('operator_id', ''),
                                     'iqama': welder_doc.get('iqama', ''),
-                                    'profile_image': welder_doc.get('profile_image', '')
+                                    'profile_image': f"{settings.MEDIA_URL}{welder_doc.get('profile_image', '')}" if welder_doc.get('profile_image', '') else None
                                 }
             except Exception:
                 pass
@@ -374,7 +376,7 @@ def pqr_detail(request, object_id):
                     'type': pqr_doc.get('type', ''),
                     'basic_info': pqr_doc.get('basic_info', {}),
                     'joints': pqr_doc.get('joints', {}),
-                    'joint_design_sketch': pqr_doc.get('joint_design_sketch', []),
+                    'joint_design_sketch': [f"{settings.MEDIA_URL}{file}" for file in pqr_doc.get('joint_design_sketch', [])],
                     'base_metals': pqr_doc.get('base_metals', {}),
                     'filler_metals': pqr_doc.get('filler_metals', {}),
                     'positions': pqr_doc.get('positions', {}),
@@ -403,8 +405,60 @@ def pqr_detail(request, object_id):
         
         elif request.method == 'PUT':
             try:
-                # Extract form data
-                data = request.POST.dict()
+                # Debug: Check request content type and data
+                print(f"Content-Type: {request.content_type}")
+                print(f"POST data: {request.POST}")
+                print(f"FILES data: {request.FILES}")
+                
+                # Extract form data - handle both form data and JSON
+                if request.content_type and 'application/json' in request.content_type:
+                    # Handle JSON data
+                    try:
+                        data = json.loads(request.body)
+                        print(f"JSON data: {data}")
+                    except json.JSONDecodeError:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': 'Invalid JSON format'
+                        }, status=400)
+                elif request.content_type and 'multipart/form-data' in request.content_type:
+                    # Handle multipart form data for PUT requests
+                    try:
+                        from django.http.multipartparser import MultiPartParser
+                        from django.core.files.uploadhandler import MemoryFileUploadHandler
+                        from io import BytesIO
+                        
+                        # Create upload handlers
+                        upload_handlers = [MemoryFileUploadHandler()]
+                        
+                        # Create a file-like object from the request body
+                        body_file = BytesIO(request.body)
+                        
+                        # Parse the multipart data
+                        parser = MultiPartParser(request.META, body_file, upload_handlers)
+                        parsed_data, files = parser.parse()
+                        
+                        # Convert QueryDict to regular dict for easier handling
+                        data = {}
+                        for key, value in parsed_data.items():
+                            if isinstance(value, list) and len(value) == 1:
+                                data[key] = value[0]
+                            else:
+                                data[key] = value
+                        
+                        print(f"Parsed multipart data: {data}")
+                        print(f"Parsed files: {files}")
+                        
+                    except Exception as e:
+                        print(f"Error parsing multipart data: {e}")
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': f'Failed to parse multipart form data: {str(e)}'
+                        }, status=400)
+                else:
+                    # Handle regular form data
+                    data = request.POST.dict()
+                    print(f"Form data: {data}")
                 
                 # Prepare update document
                 update_doc = {}
@@ -430,15 +484,17 @@ def pqr_detail(request, object_id):
                         return {}
                 
                 # Handle joint_design_sketch file uploads
-                if 'joint_design_sketch' in request.FILES:
+                files_to_process = files if 'files' in locals() else request.FILES
+                if 'joint_design_sketch' in files_to_process:
                     import uuid
                     import os
                     from django.core.files.storage import default_storage
                     from django.core.files.base import ContentFile
+                    from django.conf import settings
                     
                     joint_design_sketch = []
                     pqr_id = str(obj_id)
-                    uploaded_files = request.FILES.getlist('joint_design_sketch')
+                    uploaded_files = files_to_process.getlist('joint_design_sketch')
                     
                     for uploaded_file in uploaded_files:
                         if uploaded_file and uploaded_file.size > 0:
@@ -478,6 +534,16 @@ def pqr_detail(request, object_id):
                     if field in data:
                         update_doc[field] = data[field]
                 
+                # Handle welder_card_id specially (convert to ObjectId)
+                if 'welder_card_id' in data:
+                    try:
+                        update_doc['welder_card_id'] = ObjectId(data['welder_card_id'])
+                    except Exception:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': 'Invalid welder_card_id format'
+                        }, status=400)
+                
                 # Update JSON fields
                 json_fields = [
                     'basic_info', 'joints', 'base_metals', 'filler_metals', 'positions',
@@ -489,8 +555,7 @@ def pqr_detail(request, object_id):
                 for field in json_fields:
                     if field in data:
                         parsed_value = parse_json_field(data[field])
-                        if parsed_value or field in data:  # Include even if empty dict, as long as field was provided
-                            update_doc[field] = parsed_value
+                        update_doc[field] = parsed_value
                 
                 # Update boolean field
                 if 'is_active' in data:
@@ -500,7 +565,7 @@ def pqr_detail(request, object_id):
                 if not update_doc:
                     return JsonResponse({
                         'status': 'error',
-                        'message': 'No fields provided for update. Please provide at least one field to update or upload files.'
+                        'message': f'No fields provided for update. Available fields: {list(data.keys())}. Please provide at least one field to update or upload files.'
                     }, status=400)
                 
                 # Add updated timestamp
@@ -522,7 +587,7 @@ def pqr_detail(request, object_id):
                         'id': str(updated_pqr.get('_id', '')),
                         'type': updated_pqr.get('type', ''),
                         'lab_test_no': updated_pqr.get('lab_test_no', ''),
-                        'joint_design_sketch': updated_pqr.get('joint_design_sketch', []),
+                        'joint_design_sketch': [f"{settings.MEDIA_URL}{file}" for file in updated_pqr.get('joint_design_sketch', [])],
                         'updated_at': updated_pqr.get('updated_at').isoformat() if updated_pqr.get('updated_at') else ''
                     }
                 })
