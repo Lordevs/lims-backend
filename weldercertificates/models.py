@@ -27,6 +27,8 @@ class WelderCertificate(Document):
     Welder operator qualification certificate model
     """
     welder_card_id = fields.ObjectIdField(required=True)  # Reference to WelderCard._id
+    certificate_no = fields.StringField(max_length=100)  # Certificate number
+    company = fields.StringField(max_length=200)  # Company name
     date_of_test = fields.StringField(max_length=20)  # Date as string (YYYY-MM-DD format)
     identification_of_wps_pqr = fields.StringField(max_length=200)
     qualification_standard = fields.StringField(max_length=200)
@@ -46,6 +48,8 @@ class WelderCertificate(Document):
         'collection': 'welder_certificates',
         'indexes': [
             'welder_card_id', 
+            'certificate_no',
+            'company',
             'date_of_test', 
             'qualification_standard',
             'law_name',

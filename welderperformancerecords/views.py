@@ -119,6 +119,7 @@ def welder_performance_record_list(request):
                     'id': str(record_doc.get('_id', '')),
                     'welder_card_id': str(record_doc.get('welder_card_id', '')),
                     'welder_card_info': welder_card_info,
+                    'certificate_no': record_doc.get('certificate_no', ''),
                     'wps_followed_date': record_doc.get('wps_followed_date', ''),
                     'date_of_issue': record_doc.get('date_of_issue', ''),
                     'date_of_welding': record_doc.get('date_of_welding', ''),
@@ -208,6 +209,7 @@ def welder_performance_record_list(request):
             
             performance_record = WelderPerformanceRecord(
                 welder_card_id=ObjectId(data['welder_card_id']),
+                certificate_no=data.get('certificate_no', ''),
                 wps_followed_date=data.get('wps_followed_date', ''),
                 date_of_issue=data.get('date_of_issue', ''),
                 date_of_welding=data.get('date_of_welding', ''),
@@ -341,6 +343,7 @@ def welder_performance_record_detail(request, object_id):
                     'id': str(record_doc.get('_id', '')),
                     'welder_card_id': str(record_doc.get('welder_card_id', '')),
                     'welder_card_info': welder_card_info,
+                    'certificate_no': record_doc.get('certificate_no', ''),
                     'wps_followed_date': record_doc.get('wps_followed_date', ''),
                     'date_of_issue': record_doc.get('date_of_issue', ''),
                     'date_of_welding': record_doc.get('date_of_welding', ''),
@@ -385,7 +388,7 @@ def welder_performance_record_detail(request, object_id):
                 
                 # Update other fields if provided
                 update_fields = [
-                    'wps_followed_date', 'date_of_issue', 'date_of_welding', 'joint_weld_type',
+                    'certificate_no', 'wps_followed_date', 'date_of_issue', 'date_of_welding', 'joint_weld_type',
                     'base_metal_spec', 'base_metal_p_no', 'filler_sfa_spec', 'filler_class_aws',
                     'test_coupon_size', 'positions', 'testing_variables_and_qualification_limits_automatic',
                     'testing_variables_and_qualification_limits_machine', 'law_name', 'tested_by', 'witnessed_by', 'is_active'
@@ -526,6 +529,7 @@ def welder_performance_record_search(request):
     - tested_by: Search by tested by field (case-insensitive)
     - date_of_welding: Search by date of welding (exact match)
     - welder_card_id: Search by welder card ID
+    - certificate_no: Search by certificate number (case-insensitive)
     """
     try:
         # Get query parameters
@@ -533,6 +537,7 @@ def welder_performance_record_search(request):
         tested_by = request.GET.get('tested_by', '')
         date_of_welding = request.GET.get('date_of_welding', '')
         welder_card_id = request.GET.get('welder_card_id', '')
+        certificate_no = request.GET.get('certificate_no', '')
         
         # Build query for raw MongoDB
         query = {}
@@ -550,6 +555,8 @@ def welder_performance_record_search(request):
                     'status': 'error',
                     'message': 'Invalid welder_card_id format'
                 }, status=400)
+        if certificate_no:
+            query['certificate_no'] = {'$regex': certificate_no, '$options': 'i'}
         
         # Use raw query to search
         db = connection.get_db()
@@ -561,6 +568,7 @@ def welder_performance_record_search(request):
         for record_doc in performance_records:
             data.append({
                 'id': str(record_doc.get('_id', '')),
+                'certificate_no': record_doc.get('certificate_no', ''),
                 'law_name': record_doc.get('law_name', ''),
                 'date_of_welding': record_doc.get('date_of_welding', ''),
                 'tested_by': record_doc.get('tested_by', ''),
@@ -579,7 +587,8 @@ def welder_performance_record_search(request):
                 'law_name': law_name,
                 'tested_by': tested_by,
                 'date_of_welding': date_of_welding,
-                'welder_card_id': welder_card_id
+                'welder_card_id': welder_card_id,
+                'certificate_no': certificate_no
             }
         })
         
@@ -672,6 +681,7 @@ def welder_performance_record_by_card(request, welder_card_id):
         for record_doc in performance_records:
             data.append({
                 'id': str(record_doc.get('_id', '')),
+                'certificate_no': record_doc.get('certificate_no', ''),
                 'law_name': record_doc.get('law_name', ''),
                 'date_of_welding': record_doc.get('date_of_welding', ''),
                 'tested_by': record_doc.get('tested_by', ''),

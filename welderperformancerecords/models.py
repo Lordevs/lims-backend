@@ -27,6 +27,7 @@ class WelderPerformanceRecord(Document):
     Welder operator performance qualification record model
     """
     welder_card_id = fields.ObjectIdField(required=True)  # Reference to WelderCard._id
+    certificate_no = fields.StringField(max_length=100)  # Certificate number
     wps_followed_date = fields.StringField(max_length=20)  # Date as string (YYYY-MM-DD format)
     date_of_issue = fields.StringField(max_length=20)  # Date as string (YYYY-MM-DD format)
     date_of_welding = fields.StringField(max_length=20)  # Date as string (YYYY-MM-DD format)
@@ -51,6 +52,7 @@ class WelderPerformanceRecord(Document):
         'collection': 'welder_performance_records',
         'indexes': [
             'welder_card_id', 
+            'certificate_no',
             'date_of_welding', 
             'date_of_issue',
             'law_name',

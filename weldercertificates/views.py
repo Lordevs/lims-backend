@@ -119,6 +119,8 @@ def welder_certificate_list(request):
                     'id': str(cert_doc.get('_id', '')),
                     'welder_card_id': str(cert_doc.get('welder_card_id', '')),
                     'welder_card_info': welder_card_info,
+                    'certificate_no': cert_doc.get('certificate_no', ''),
+                    'company': cert_doc.get('company', ''),
                     'date_of_test': cert_doc.get('date_of_test', ''),
                     'identification_of_wps_pqr': cert_doc.get('identification_of_wps_pqr', ''),
                     'qualification_standard': cert_doc.get('qualification_standard', ''),
@@ -193,6 +195,8 @@ def welder_certificate_list(request):
             
             certificate = WelderCertificate(
                 welder_card_id=ObjectId(data['welder_card_id']),
+                certificate_no=data.get('certificate_no', ''),
+                company=data.get('company', ''),
                 date_of_test=data.get('date_of_test', ''),
                 identification_of_wps_pqr=data.get('identification_of_wps_pqr', ''),
                 qualification_standard=data.get('qualification_standard', ''),
@@ -321,6 +325,8 @@ def welder_certificate_detail(request, object_id):
                     'id': str(cert_doc.get('_id', '')),
                     'welder_card_id': str(cert_doc.get('welder_card_id', '')),
                     'welder_card_info': welder_card_info,
+                    'certificate_no': cert_doc.get('certificate_no', ''),
+                    'company': cert_doc.get('company', ''),
                     'date_of_test': cert_doc.get('date_of_test', ''),
                     'identification_of_wps_pqr': cert_doc.get('identification_of_wps_pqr', ''),
                     'qualification_standard': cert_doc.get('qualification_standard', ''),
@@ -357,6 +363,10 @@ def welder_certificate_detail(request, object_id):
                         }, status=404)
                 
                 # Update other fields if provided
+                if 'certificate_no' in data:
+                    update_doc['certificate_no'] = data['certificate_no']
+                if 'company' in data:
+                    update_doc['company'] = data['company']
                 if 'date_of_test' in data:
                     update_doc['date_of_test'] = data['date_of_test']
                 if 'identification_of_wps_pqr' in data:
@@ -491,52 +501,123 @@ def welder_certificate_search(request):
     """
     Search welder certificates by various criteria
     Query parameters:
-    - law_name: Search by law name (case-insensitive)
-    - tested_by: Search by tested by field (case-insensitive)
-    - date_of_test: Search by date of test (exact match)
-    - welder_card_id: Search by welder card ID
+    - certificate_no: Search by certificate number (case-insensitive)
+    - company: Search by company name (case-insensitive)
+    - card_no: Search by card number (case-insensitive)
     """
     try:
         # Get query parameters
-        law_name = request.GET.get('law_name', '')
-        tested_by = request.GET.get('tested_by', '')
-        date_of_test = request.GET.get('date_of_test', '')
-        welder_card_id = request.GET.get('welder_card_id', '')
+        certificate_no = request.GET.get('certificate_no', '')
+        company = request.GET.get('company', '')
+        card_no = request.GET.get('card_no', '')
         
         # Build query for raw MongoDB
         query = {}
-        if law_name:
-            query['law_name'] = {'$regex': law_name, '$options': 'i'}
-        if tested_by:
-            query['tested_by'] = {'$regex': tested_by, '$options': 'i'}
-        if date_of_test:
-            query['date_of_test'] = date_of_test
-        if welder_card_id:
-            try:
-                query['welder_card_id'] = ObjectId(welder_card_id)
-            except Exception:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Invalid welder_card_id format'
-                }, status=400)
+        if certificate_no:
+            query['certificate_no'] = {'$regex': certificate_no, '$options': 'i'}
         
         # Use raw query to search
         db = connection.get_db()
         certificates_collection = db.welder_certificates
+        welder_cards_collection = db.welder_cards
+        
+        # Handle company and card_no searches that require joining with welder_cards
+        if company or card_no:
+            # First, find welder cards that match the company/card_no criteria
+            card_query = {}
+            if company:
+                card_query['company'] = {'$regex': company, '$options': 'i'}
+            if card_no:
+                card_query['card_no'] = {'$regex': card_no, '$options': 'i'}
+            
+            # Get matching card IDs
+            matching_cards = welder_cards_collection.find(card_query, {'_id': 1})
+            matching_card_ids = [card['_id'] for card in matching_cards]
+            
+            if not matching_card_ids:
+                # No matching cards found, return empty result
+                return JsonResponse({
+                    'status': 'success',
+                    'data': [],
+                    'total': 0,
+                    'filters_applied': {
+                        'certificate_no': certificate_no,
+                        'company': company,
+                        'card_no': card_no
+                    }
+                })
+            
+            # Add card ID filter to the main query
+            query['welder_card_id'] = {'$in': matching_card_ids}
         
         certificates = certificates_collection.find(query)
         
         data = []
         for cert_doc in certificates:
+            # Get welder card and welder information
+            welder_card_info = {
+                'card_id': str(cert_doc.get('welder_card_id', '')),
+                'card_no': 'Unknown',
+                'company': 'Unknown',
+                'welder_info': {
+                    'welder_id': '',
+                    'operator_name': 'Unknown Welder',
+                    'operator_id': '',
+                    'iqama': ''
+                }
+            }
+            
+            try:
+                # Get welder card information
+                welder_cards_collection = db.welder_cards
+                card_obj_id = cert_doc.get('welder_card_id')
+                if card_obj_id:
+                    if isinstance(card_obj_id, str):
+                        card_obj_id = ObjectId(card_obj_id)
+                    card_doc = welder_cards_collection.find_one({'_id': card_obj_id})
+                    if card_doc:
+                        welder_card_info.update({
+                            'card_no': card_doc.get('card_no', 'Unknown'),
+                            'company': card_doc.get('company', 'Unknown')
+                        })
+                        
+                        # Get welder information
+                        welder_obj_id = card_doc.get('welder_id')
+                        if welder_obj_id:
+                            if isinstance(welder_obj_id, str):
+                                welder_obj_id = ObjectId(welder_obj_id)
+                            welders_collection = db.welders
+                            welder_doc = welders_collection.find_one({'_id': welder_obj_id})
+                            if welder_doc:
+                                welder_card_info['welder_info'] = {
+                                    'welder_id': str(welder_doc.get('_id', '')),
+                                    'operator_name': welder_doc.get('operator_name', 'Unknown Welder'),
+                                    'operator_id': welder_doc.get('operator_id', ''),
+                                    'iqama': welder_doc.get('iqama', '')
+                                }
+            except Exception:
+                pass
+            
             data.append({
                 'id': str(cert_doc.get('_id', '')),
-                'law_name': cert_doc.get('law_name', ''),
+                'welder_card_id': str(cert_doc.get('welder_card_id', '')),
+                'welder_card_info': welder_card_info,
+                'certificate_no': cert_doc.get('certificate_no', ''),
+                'company': cert_doc.get('company', ''),
                 'date_of_test': cert_doc.get('date_of_test', ''),
+                'identification_of_wps_pqr': cert_doc.get('identification_of_wps_pqr', ''),
+                'qualification_standard': cert_doc.get('qualification_standard', ''),
+                'base_metal_specification': cert_doc.get('base_metal_specification', ''),
+                'joint_type': cert_doc.get('joint_type', ''),
+                'weld_type': cert_doc.get('weld_type', ''),
+                'testing_variables_and_qualification_limits': cert_doc.get('testing_variables_and_qualification_limits', []),
+                'tests': cert_doc.get('tests', []),
+                'law_name': cert_doc.get('law_name', ''),
                 'tested_by': cert_doc.get('tested_by', ''),
                 'witnessed_by': cert_doc.get('witnessed_by', ''),
-                'qualification_standard': cert_doc.get('qualification_standard', ''),
                 'is_active': cert_doc.get('is_active', True),
-                'created_at': cert_doc.get('created_at').isoformat() if cert_doc.get('created_at') else ''
+                'created_at': cert_doc.get('created_at').isoformat() if cert_doc.get('created_at') else '',
+                'updated_at': cert_doc.get('updated_at').isoformat() if cert_doc.get('updated_at') else ''
             })
         
         return JsonResponse({
@@ -544,10 +625,9 @@ def welder_certificate_search(request):
             'data': data,
             'total': len(data),
             'filters_applied': {
-                'law_name': law_name,
-                'tested_by': tested_by,
-                'date_of_test': date_of_test,
-                'welder_card_id': welder_card_id
+                'certificate_no': certificate_no,
+                'company': company,
+                'card_no': card_no
             }
         })
         
@@ -640,6 +720,8 @@ def welder_certificate_by_card(request, welder_card_id):
         for cert_doc in certificates:
             data.append({
                 'id': str(cert_doc.get('_id', '')),
+                'certificate_no': cert_doc.get('certificate_no', ''),
+                'company': cert_doc.get('company', ''),
                 'law_name': cert_doc.get('law_name', ''),
                 'date_of_test': cert_doc.get('date_of_test', ''),
                 'tested_by': cert_doc.get('tested_by', ''),

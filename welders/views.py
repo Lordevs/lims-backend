@@ -520,7 +520,11 @@ def welder_search(request):
                 'operator_name': welder.operator_name,
                 'operator_id': welder.operator_id,
                 'iqama': welder.iqama,
-                'is_active': welder.is_active
+                'profile_image': welder.profile_image,
+                'profile_image_url': f"{settings.MEDIA_URL}{welder.profile_image}" if welder.profile_image else None,
+                'is_active': welder.is_active,
+                'created_at': welder.created_at.isoformat(),
+                'updated_at': welder.updated_at.isoformat()
             })
         
         return JsonResponse({
