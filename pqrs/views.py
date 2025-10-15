@@ -404,6 +404,8 @@ def pqr_detail(request, object_id):
             })
         
         elif request.method == 'PUT':
+            from django.conf import settings
+            
             try:
                 # Debug: Check request content type and data
                 print(f"Content-Type: {request.content_type}")
