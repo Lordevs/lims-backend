@@ -133,7 +133,7 @@ def register(request):
                 }, status=400)
         
         # Validate role
-        valid_roles = ['admin', 'project_coordinator', 'lab_engg']
+        valid_roles = ['admin', 'project_coordinator', 'lab_engg', 'welding_coordinator']
         if data['role'] not in valid_roles:
             return JsonResponse({
                 'status': 'error',

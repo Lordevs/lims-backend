@@ -551,20 +551,142 @@ def welder_search(request):
 @any_authenticated_user
 def welder_stats(request):
     """
-    Get welder statistics
+    Get comprehensive statistics for all welder-related sections
     """
     try:
+        from datetime import datetime, timedelta
+        from bson import ObjectId
+        from mongoengine import connection
+        
+        db = connection.get_db()
+        
+        # ============= WELDERS STATISTICS =============
         total_welders = Welder.objects.count()
         active_welders = Welder.objects.filter(is_active=True).count()
         inactive_welders = Welder.objects.filter(is_active=False).count()
         
+        # Recent activity (last 30 days)
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        recent_welders = Welder.objects.filter(created_at__gte=thirty_days_ago).count()
+        
+        # Get welders collection for future use
+        welders_collection = db.welders
+        
+        # Recent welders (last 7 days)
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        recent_welders_week = Welder.objects.filter(created_at__gte=seven_days_ago).count()
+        
+        # ============= WELDER CARDS STATISTICS =============
+        welder_cards_collection = db.welder_cards
+        total_cards = welder_cards_collection.count_documents({})
+        active_cards = welder_cards_collection.count_documents({'is_active': True})
+        inactive_cards = welder_cards_collection.count_documents({'is_active': False})
+        recent_cards = welder_cards_collection.count_documents({'created_at': {'$gte': thirty_days_ago}})
+        
+        
+        # ============= WELDER CERTIFICATES STATISTICS =============
+        certificates_collection = db.welder_certificates
+        total_certificates = certificates_collection.count_documents({})
+        active_certificates = certificates_collection.count_documents({'is_active': True})
+        inactive_certificates = certificates_collection.count_documents({'is_active': False})
+        recent_certificates = certificates_collection.count_documents({'created_at': {'$gte': thirty_days_ago}})
+        
+        
+        # ============= WELDER PERFORMANCE RECORDS STATISTICS =============
+        performance_records_collection = db.welder_performance_records
+        total_performance_records = performance_records_collection.count_documents({})
+        active_performance_records = performance_records_collection.count_documents({'is_active': True})
+        inactive_performance_records = performance_records_collection.count_documents({'is_active': False})
+        recent_performance_records = performance_records_collection.count_documents({'created_at': {'$gte': thirty_days_ago}})
+        
+        
+        # ============= TESTING REPORTS STATISTICS =============
+        testing_reports_collection = db.testing_reports
+        total_testing_reports = testing_reports_collection.count_documents({})
+        active_testing_reports = testing_reports_collection.count_documents({'is_active': True})
+        inactive_testing_reports = testing_reports_collection.count_documents({'is_active': False})
+        recent_testing_reports = testing_reports_collection.count_documents({'created_at': {'$gte': thirty_days_ago}})
+        
+        
+        # ============= PQR STATISTICS =============
+        pqrs_collection = db.pqrs
+        total_pqrs = pqrs_collection.count_documents({})
+        active_pqrs = pqrs_collection.count_documents({'is_active': True})
+        inactive_pqrs = pqrs_collection.count_documents({'is_active': False})
+        recent_pqrs = pqrs_collection.count_documents({'created_at': {'$gte': thirty_days_ago}})
+        
+        
         return JsonResponse({
             'status': 'success',
             'data': {
-                'total_welders': total_welders,
-                'active_welders': active_welders,
-                'inactive_welders': inactive_welders,
-                'activity_rate': round((active_welders / total_welders * 100), 2) if total_welders > 0 else 0
+                'welders': {
+                    'overview': {
+                        'total_welders': total_welders,
+                        'active_welders': active_welders,
+                        'inactive_welders': inactive_welders,
+                        'activity_rate': round((active_welders / total_welders * 100), 2) if total_welders > 0 else 0
+                    },
+                    'recent_activity': {
+                        'new_welders_last_30_days': recent_welders,
+                        'new_welders_last_7_days': recent_welders_week
+                    }
+                },
+                'welder_cards': {
+                    'overview': {
+                        'total_cards': total_cards,
+                        'active_cards': active_cards,
+                        'inactive_cards': inactive_cards,
+                        'activity_rate': round((active_cards / total_cards * 100), 2) if total_cards > 0 else 0
+                    },
+                    'recent_activity': {
+                        'new_cards_last_30_days': recent_cards
+                    }
+                },
+                'welder_certificates': {
+                    'overview': {
+                        'total_certificates': total_certificates,
+                        'active_certificates': active_certificates,
+                        'inactive_certificates': inactive_certificates,
+                        'activity_rate': round((active_certificates / total_certificates * 100), 2) if total_certificates > 0 else 0
+                    },
+                    'recent_activity': {
+                        'new_certificates_last_30_days': recent_certificates
+                    }
+                },
+                'welder_performance_records': {
+                    'overview': {
+                        'total_records': total_performance_records,
+                        'active_records': active_performance_records,
+                        'inactive_records': inactive_performance_records,
+                        'activity_rate': round((active_performance_records / total_performance_records * 100), 2) if total_performance_records > 0 else 0
+                    },
+                    'recent_activity': {
+                        'new_records_last_30_days': recent_performance_records
+                    }
+                },
+                'testing_reports': {
+                    'overview': {
+                        'total_reports': total_testing_reports,
+                        'active_reports': active_testing_reports,
+                        'inactive_reports': inactive_testing_reports,
+                        'activity_rate': round((active_testing_reports / total_testing_reports * 100), 2) if total_testing_reports > 0 else 0
+                    },
+                    'recent_activity': {
+                        'new_reports_last_30_days': recent_testing_reports
+                    }
+                },
+                'pqrs': {
+                    'overview': {
+                        'total_pqrs': total_pqrs,
+                        'active_pqrs': active_pqrs,
+                        'inactive_pqrs': inactive_pqrs,
+                        'activity_rate': round((active_pqrs / total_pqrs * 100), 2) if total_pqrs > 0 else 0
+                    },
+                    'recent_activity': {
+                        'new_pqrs_last_30_days': recent_pqrs
+                    }
+                },
+                'generated_at': datetime.now().isoformat()
             }
         })
         

@@ -481,24 +481,59 @@ def welder_card_search(request):
 @any_authenticated_user
 def welder_card_stats(request):
     """
-    Get welder card statistics
+    Get comprehensive welder card statistics
     """
     try:
+        from datetime import datetime, timedelta
+        
         # Use raw query to count welder cards
         db = connection.get_db()
         welder_cards_collection = db.welder_cards
         
+        # Basic counts
         total_cards = welder_cards_collection.count_documents({})
         active_cards = welder_cards_collection.count_documents({'is_active': True})
         inactive_cards = welder_cards_collection.count_documents({'is_active': False})
         
+        # Recent activity (last 30 days)
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        recent_cards = welder_cards_collection.count_documents({'created_at': {'$gte': thirty_days_ago}})
+        
+        # Company distribution (top 10)
+        company_stats = welder_cards_collection.aggregate([
+            {'$match': {'company': {'$ne': ''}}},
+            {'$group': {'_id': '$company', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}},
+            {'$limit': 10}
+        ])
+        
+        # Cards with attributes
+        cards_with_attributes = welder_cards_collection.count_documents({'attributes': {'$exists': True, '$ne': {}}})
+        
+        # Recent cards (last 7 days)
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        recent_cards_week = welder_cards_collection.count_documents({'created_at': {'$gte': seven_days_ago}})
+        
         return JsonResponse({
             'status': 'success',
             'data': {
-                'total_cards': total_cards,
-                'active_cards': active_cards,
-                'inactive_cards': inactive_cards,
-                'activity_rate': round((active_cards / total_cards * 100), 2) if total_cards > 0 else 0
+                'overview': {
+                    'total_cards': total_cards,
+                    'active_cards': active_cards,
+                    'inactive_cards': inactive_cards,
+                    'activity_rate': round((active_cards / total_cards * 100), 2) if total_cards > 0 else 0
+                },
+                'recent_activity': {
+                    'new_cards_last_30_days': recent_cards,
+                    'new_cards_last_7_days': recent_cards_week
+                },
+                'completion_rates': {
+                    'cards_with_attributes': cards_with_attributes,
+                    'cards_without_attributes': total_cards - cards_with_attributes,
+                    'attribute_completion_rate': round((cards_with_attributes / total_cards * 100), 2) if total_cards > 0 else 0
+                },
+                'company_distribution': list(company_stats),
+                'generated_at': datetime.now().isoformat()
             }
         })
         
