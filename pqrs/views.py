@@ -9,7 +9,6 @@ from mongoengine import connection
 from mongoengine.errors import DoesNotExist, ValidationError
 
 from .models import PQR
-from weldercards.models import WelderCard
 from welders.models import Welder
 from authentication.decorators import any_authenticated_user, welding_operations_required
 from lims_backend.utilities.pagination import get_pagination_params, create_pagination_response, paginate_queryset
@@ -21,7 +20,7 @@ from lims_backend.utilities.pagination import get_pagination_params, create_pagi
 def pqr_list(request):
     """
     List all PQRs or create a new PQR
-    GET: Returns list of all PQRs with welder card and welder information
+    GET: Returns list of all PQRs with welder information
     POST: Creates a new PQR
     """
     if request.method == 'GET':
@@ -70,47 +69,32 @@ def pqr_list(request):
             data = []
             
             for pqr_doc in pqrs:
-                # Get welder card and welder information
-                welder_card_info = {
-                    'card_id': str(pqr_doc.get('welder_card_id', '')),
-                    'card_no': 'Unknown',
-                    'company': 'Unknown',
-                    'welder_info': {
-                        'welder_id': '',
-                        'operator_name': 'Unknown Welder',
-                        'operator_id': '',
-                        'iqama': ''
-                    }
+                # Get welder information
+                welder_info = {
+                    'welder_id': '',
+                    'operator_name': 'Unknown Welder',
+                    'operator_id': '',
+                    'iqama': '',
+                    'profile_image': None
                 }
                 
                 try:
-                    # Get welder card information
-                    welder_cards_collection = db.welder_cards
-                    card_obj_id = pqr_doc.get('welder_card_id')
-                    if card_obj_id:
-                        if isinstance(card_obj_id, str):
-                            card_obj_id = ObjectId(card_obj_id)
-                        card_doc = welder_cards_collection.find_one({'_id': card_obj_id})
-                        if card_doc:
-                            welder_card_info.update({
-                                'card_no': card_doc.get('card_no', 'Unknown'),
-                                'company': card_doc.get('company', 'Unknown')
-                            })
-                            
-                            # Get welder information
-                            welder_obj_id = card_doc.get('welder_id')
-                            if welder_obj_id:
-                                if isinstance(welder_obj_id, str):
-                                    welder_obj_id = ObjectId(welder_obj_id)
-                                welders_collection = db.welders
-                                welder_doc = welders_collection.find_one({'_id': welder_obj_id})
-                                if welder_doc:
-                                    welder_card_info['welder_info'] = {
-                                        'welder_id': str(welder_doc.get('_id', '')),
-                                        'operator_name': welder_doc.get('operator_name', 'Unknown Welder'),
-                                        'operator_id': welder_doc.get('operator_id', ''),
-                                        'iqama': welder_doc.get('iqama', '')
-                                    }
+                    # Get welder information directly
+                    welder_obj_id = pqr_doc.get('welder_id')
+                    if welder_obj_id:
+                        if isinstance(welder_obj_id, str):
+                            welder_obj_id = ObjectId(welder_obj_id)
+                        welders_collection = db.welders
+                        welder_doc = welders_collection.find_one({'_id': welder_obj_id})
+                        if welder_doc:
+                            welder_info = {
+                                'welder_id': str(welder_doc.get('_id', '')),
+                                'operator_name': welder_doc.get('operator_name', 'Unknown Welder'),
+                                'operator_id': welder_doc.get('operator_id', ''),
+                                'iqama': welder_doc.get('iqama', ''),
+                                'profile_image': welder_doc.get('profile_image', ''),
+                                'profile_image_url': f"/media/{welder_doc.get('profile_image', '')}" if welder_doc.get('profile_image', '') else None
+                            }
                 except Exception:
                     pass
                 
@@ -134,8 +118,8 @@ def pqr_list(request):
                     'toughness_test': pqr_doc.get('toughness_test', {}),
                     'fillet_weld_test': pqr_doc.get('fillet_weld_test', {}),
                     'other_tests': pqr_doc.get('other_tests', {}),
-                    'welder_card_id': str(pqr_doc.get('welder_card_id', '')),
-                    'welder_card_info': welder_card_info,
+                    'welder_id': str(pqr_doc.get('welder_id', '')),
+                    'welder_info': welder_info,
                     'mechanical_testing_conducted_by': pqr_doc.get('mechanical_testing_conducted_by', ''),
                     'lab_test_no': pqr_doc.get('lab_test_no', ''),
                     'law_name': pqr_doc.get('law_name', ''),
@@ -164,7 +148,7 @@ def pqr_list(request):
             data = request.POST.dict()
             
             # Validate required fields
-            required_fields = ['type', 'welder_card_id', 'mechanical_testing_conducted_by', 'lab_test_no', 'law_name']
+            required_fields = ['type', 'welder_id', 'mechanical_testing_conducted_by', 'lab_test_no', 'law_name']
             for field in required_fields:
                 if field not in data or not data[field]:
                     return JsonResponse({
@@ -172,13 +156,13 @@ def pqr_list(request):
                         'message': f'Required field "{field}" is missing or empty'
                     }, status=400)
             
-            # Validate that the welder card exists
+            # Validate that the welder exists
             try:
-                welder_card = WelderCard.objects.get(id=ObjectId(data['welder_card_id']))
+                welder = Welder.objects.get(id=ObjectId(data['welder_id']))
             except (DoesNotExist, Exception) as e:
                 return JsonResponse({
                     'status': 'error',
-                    'message': f'Welder card not found: {str(e)}'
+                    'message': f'Welder not found: {str(e)}'
                 }, status=400)
             
             # Helper function to parse JSON strings from form data
@@ -213,7 +197,7 @@ def pqr_list(request):
                 toughness_test=parse_json_field(data.get('toughness_test')),
                 fillet_weld_test=parse_json_field(data.get('fillet_weld_test')),
                 other_tests=parse_json_field(data.get('other_tests')),
-                welder_card_id=ObjectId(data['welder_card_id']),
+                welder_id=ObjectId(data['welder_id']),
                 mechanical_testing_conducted_by=data['mechanical_testing_conducted_by'],
                 lab_test_no=data['lab_test_no'],
                 law_name=data['law_name'],
@@ -294,7 +278,7 @@ def pqr_list(request):
 def pqr_detail(request, object_id):
     """
     Get, update, or delete a specific PQR by ObjectId
-    GET: Returns PQR details with welder card and welder information
+    GET: Returns PQR details with welder information
     PUT: Updates PQR information
     DELETE: Deletes the PQR
     """
@@ -322,50 +306,33 @@ def pqr_detail(request, object_id):
         if request.method == 'GET':
             from django.conf import settings
             
-            # Get welder card and welder information
-            welder_card_info = {
-                'card_id': str(pqr_doc.get('welder_card_id', '')),
-                'card_no': 'Unknown',
-                'company': 'Unknown',
-                'welder_info': {
-                    'welder_id': '',
-                    'operator_name': 'Unknown Welder',
-                    'operator_id': '',
-                    'iqama': ''
-                }
+            # Get welder information
+            welder_info = {
+                'welder_id': '',
+                'operator_name': 'Unknown Welder',
+                'operator_id': '',
+                'iqama': '',
+                'profile_image': None,
+                'profile_image_url': None
             }
             
             try:
-                # Get welder card information
-                welder_cards_collection = db.welder_cards
-                card_obj_id = pqr_doc.get('welder_card_id')
-                if card_obj_id:
-                    if isinstance(card_obj_id, str):
-                        card_obj_id = ObjectId(card_obj_id)
-                    card_doc = welder_cards_collection.find_one({'_id': card_obj_id})
-                    if card_doc:
-                        welder_card_info.update({
-                            'card_no': card_doc.get('card_no', 'Unknown'),
-                            'company': card_doc.get('company', 'Unknown'),
-                            'authorized_by': card_doc.get('authorized_by', ''),
-                            'welding_inspector': card_doc.get('welding_inspector', '')
-                        })
-                        
-                        # Get welder information
-                        welder_obj_id = card_doc.get('welder_id')
-                        if welder_obj_id:
-                            if isinstance(welder_obj_id, str):
-                                welder_obj_id = ObjectId(welder_obj_id)
-                            welders_collection = db.welders
-                            welder_doc = welders_collection.find_one({'_id': welder_obj_id})
-                            if welder_doc:
-                                welder_card_info['welder_info'] = {
-                                    'welder_id': str(welder_doc.get('_id', '')),
-                                    'operator_name': welder_doc.get('operator_name', 'Unknown Welder'),
-                                    'operator_id': welder_doc.get('operator_id', ''),
-                                    'iqama': welder_doc.get('iqama', ''),
-                                    'profile_image': f"{settings.MEDIA_URL}{welder_doc.get('profile_image', '')}" if welder_doc.get('profile_image', '') else None
-                                }
+                # Get welder information directly
+                welder_obj_id = pqr_doc.get('welder_id')
+                if welder_obj_id:
+                    if isinstance(welder_obj_id, str):
+                        welder_obj_id = ObjectId(welder_obj_id)
+                    welders_collection = db.welders
+                    welder_doc = welders_collection.find_one({'_id': welder_obj_id})
+                    if welder_doc:
+                        welder_info = {
+                            'welder_id': str(welder_doc.get('_id', '')),
+                            'operator_name': welder_doc.get('operator_name', 'Unknown Welder'),
+                            'operator_id': welder_doc.get('operator_id', ''),
+                            'iqama': welder_doc.get('iqama', ''),
+                            'profile_image': welder_doc.get('profile_image', ''),
+                            'profile_image_url': f"{settings.MEDIA_URL}{welder_doc.get('profile_image', '')}" if welder_doc.get('profile_image', '') else None
+                        }
             except Exception:
                 pass
             
@@ -391,8 +358,8 @@ def pqr_detail(request, object_id):
                     'toughness_test': pqr_doc.get('toughness_test', {}),
                     'fillet_weld_test': pqr_doc.get('fillet_weld_test', {}),
                     'other_tests': pqr_doc.get('other_tests', {}),
-                    'welder_card_id': str(pqr_doc.get('welder_card_id', '')),
-                    'welder_card_info': welder_card_info,
+                    'welder_id': str(pqr_doc.get('welder_id', '')),
+                    'welder_info': welder_info,
                     'mechanical_testing_conducted_by': pqr_doc.get('mechanical_testing_conducted_by', ''),
                     'lab_test_no': pqr_doc.get('lab_test_no', ''),
                     'law_name': pqr_doc.get('law_name', ''),
@@ -465,15 +432,15 @@ def pqr_detail(request, object_id):
                 # Prepare update document
                 update_doc = {}
                 
-                # Update welder_card_id if provided
-                if 'welder_card_id' in data:
+                # Update welder_id if provided
+                if 'welder_id' in data:
                     try:
-                        welder_card = WelderCard.objects.get(id=ObjectId(data['welder_card_id']))
-                        update_doc['welder_card_id'] = ObjectId(data['welder_card_id'])
+                        welder = Welder.objects.get(id=ObjectId(data['welder_id']))
+                        update_doc['welder_id'] = ObjectId(data['welder_id'])
                     except (DoesNotExist, Exception):
                         return JsonResponse({
                             'status': 'error',
-                            'message': 'Welder card not found'
+                            'message': 'Welder not found'
                         }, status=404)
                 
                 # Helper function to parse JSON strings from form data
@@ -536,14 +503,14 @@ def pqr_detail(request, object_id):
                     if field in data:
                         update_doc[field] = data[field]
                 
-                # Handle welder_card_id specially (convert to ObjectId)
-                if 'welder_card_id' in data:
+                # Handle welder_id specially (convert to ObjectId)
+                if 'welder_id' in data:
                     try:
-                        update_doc['welder_card_id'] = ObjectId(data['welder_card_id'])
+                        update_doc['welder_id'] = ObjectId(data['welder_id'])
                     except Exception:
                         return JsonResponse({
                             'status': 'error',
-                            'message': 'Invalid welder_card_id format'
+                            'message': 'Invalid welder_id format'
                         }, status=400)
                 
                 # Update JSON fields
@@ -651,14 +618,14 @@ def pqr_search(request):
     - law_name: Search by law name (case-insensitive)
     - lab_test_no: Search by lab test number (case-insensitive)
     - type: Search by type (case-insensitive)
-    - welder_card_id: Search by welder card ID
+    - welder_id: Search by welder ID
     """
     try:
         # Get query parameters
         law_name = request.GET.get('law_name', '')
         lab_test_no = request.GET.get('lab_test_no', '')
         type_filter = request.GET.get('type', '')
-        welder_card_id = request.GET.get('welder_card_id', '')
+        welder_id = request.GET.get('welder_id', '')
         
         # Build query for raw MongoDB
         query = {}
@@ -668,13 +635,13 @@ def pqr_search(request):
             query['lab_test_no'] = {'$regex': lab_test_no, '$options': 'i'}
         if type_filter:
             query['type'] = {'$regex': type_filter, '$options': 'i'}
-        if welder_card_id:
+        if welder_id:
             try:
-                query['welder_card_id'] = ObjectId(welder_card_id)
+                query['welder_id'] = ObjectId(welder_id)
             except Exception:
                 return JsonResponse({
                     'status': 'error',
-                    'message': 'Invalid welder_card_id format'
+                    'message': 'Invalid welder_id format'
                 }, status=400)
         
         # Use raw query to search
@@ -703,7 +670,7 @@ def pqr_search(request):
                 'law_name': law_name,
                 'lab_test_no': lab_test_no,
                 'type': type_filter,
-                'welder_card_id': welder_card_id
+                'welder_id': welder_id
             }
         })
         
@@ -769,35 +736,35 @@ def pqr_stats(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 @any_authenticated_user
-def pqr_by_card(request, welder_card_id):
+def pqr_by_welder(request, welder_id):
     """
-    Get all PQRs for a specific welder card
+    Get all PQRs for a specific welder
     """
     try:
         # Validate ObjectId format
         try:
-            card_obj_id = ObjectId(welder_card_id)
+            welder_obj_id = ObjectId(welder_id)
         except Exception:
             return JsonResponse({
                 'status': 'error',
-                'message': f'Invalid welder card ID format: {welder_card_id}'
+                'message': f'Invalid welder ID format: {welder_id}'
             }, status=400)
         
-        # Verify welder card exists
+        # Verify welder exists
         try:
-            welder_card = WelderCard.objects.get(id=card_obj_id)
+            welder = Welder.objects.get(id=welder_obj_id)
         except (DoesNotExist, Exception):
             return JsonResponse({
                 'status': 'error',
-                'message': 'Welder card not found'
+                'message': 'Welder not found'
             }, status=404)
         
-        # Use raw query to find PQRs by welder card
+        # Use raw query to find PQRs by welder
         db = connection.get_db()
         pqrs_collection = db.pqrs
         
         pqrs = pqrs_collection.find({
-            'welder_card_id': card_obj_id
+            'welder_id': welder_obj_id
         })
         
         data = []
@@ -816,10 +783,11 @@ def pqr_by_card(request, welder_card_id):
             'status': 'success',
             'data': data,
             'total': len(data),
-            'welder_card_info': {
-                'card_id': str(welder_card.id),
-                'card_no': welder_card.card_no,
-                'company': welder_card.company
+            'welder_info': {
+                'welder_id': str(welder.id),
+                'operator_name': welder.operator_name,
+                'operator_id': welder.operator_id,
+                'iqama': welder.iqama
             }
         })
         

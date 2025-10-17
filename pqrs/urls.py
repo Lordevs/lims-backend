@@ -9,5 +9,5 @@ urlpatterns = [
     path('search/', views.pqr_search, name='pqr_search'),         # GET: Search PQRs
     path('stats/', views.pqr_stats, name='pqr_stats'),           # GET: PQR statistics
     path('<str:object_id>/', views.pqr_detail, name='pqr_detail'), # GET/PUT/DELETE: PQR details
-    path('by-card/<str:welder_card_id>/', views.pqr_by_card, name='pqr_by_card'), # GET: PQRs by card
+    path('by-welder/<str:welder_id>/', views.pqr_by_welder, name='pqr_by_welder'), # GET: PQRs by welder
 ]

@@ -567,7 +567,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"welder_card_id\": \"{{card_id}}\",\n    \"date_of_test\": \"2024-01-15\",\n    \"identification_of_wps_pqr\": \"WPS-2024-001\",\n    \"qualification_standard\": \"AWS D1.1\",\n    \"base_metal_specification\": \"ASTM A36\",\n    \"joint_type\": \"Butt Joint\",\n    \"weld_type\": \"Single V-Groove\",\n    \"testing_variables_and_qualification_limits\": {\n        \"thickness_range\": \"3-25mm\",\n        \"position\": \"All Positions\",\n        \"filler_metal\": \"ER70S-6\"\n    },\n    \"tests\": [\n        {\n            \"type\": \"Tensile Test\",\n            \"test_performed\": true,\n            \"results\": \"Pass - 450 MPa\",\n            \"report_no\": \"TR-2024-001\"\n        },\n        {\n            \"type\": \"Bend Test\",\n            \"test_performed\": true,\n            \"results\": \"Pass - No cracks\",\n            \"report_no\": \"BR-2024-001\"\n        }\n    ],\n    \"law_name\": \"AWS D1.1\",\n    \"tested_by\": \"Dr. Sarah Wilson\",\n    \"witnessed_by\": \"Eng. Ahmed Hassan\"\n}"
+							"raw": "{\n    \"welder_id\": \"{{card_id}}\",\n    \"date_of_test\": \"2024-01-15\",\n    \"identification_of_wps_pqr\": \"WPS-2024-001\",\n    \"qualification_standard\": \"AWS D1.1\",\n    \"base_metal_specification\": \"ASTM A36\",\n    \"joint_type\": \"Butt Joint\",\n    \"weld_type\": \"Single V-Groove\",\n    \"testing_variables_and_qualification_limits\": {\n        \"thickness_range\": \"3-25mm\",\n        \"position\": \"All Positions\",\n        \"filler_metal\": \"ER70S-6\"\n    },\n    \"tests\": [\n        {\n            \"type\": \"Tensile Test\",\n            \"test_performed\": true,\n            \"results\": \"Pass - 450 MPa\",\n            \"report_no\": \"TR-2024-001\"\n        },\n        {\n            \"type\": \"Bend Test\",\n            \"test_performed\": true,\n            \"results\": \"Pass - No cracks\",\n            \"report_no\": \"BR-2024-001\"\n        }\n    ],\n    \"law_name\": \"AWS D1.1\",\n    \"tested_by\": \"Dr. Sarah Wilson\",\n    \"witnessed_by\": \"Eng. Ahmed Hassan\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/welder-certificates/",
@@ -678,7 +678,7 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/welder-certificates/search/?law_name=AWS D1.1&tested_by=Dr. Sarah Wilson&date_of_test=2024-01-15&welder_card_id={{card_id}}",
+							"raw": "{{base_url}}/api/welder-certificates/search/?law_name=AWS D1.1&tested_by=Dr. Sarah Wilson&date_of_test=2024-01-15&welder_id={{card_id}}",
 							"host": ["{{base_url}}"],
 							"path": ["api", "welder-certificates", "search", ""],
 							"query": [
@@ -695,8 +695,8 @@
 									"value": "2024-01-15"
 								},
 								{
-									"key": "welder_card_id",
-									"value": "{{card_id}}"
+									"key": "welder_id",
+									"value": "{{welder_id}}"
 								}
 							]
 						}
@@ -760,7 +760,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"welder_card_id\": \"{{card_id}}\",\n    \"wps_followed_date\": \"2024-01-10\",\n    \"date_of_issue\": \"2024-01-15\",\n    \"date_of_welding\": \"2024-01-12\",\n    \"joint_weld_type\": \"Butt Joint - Single V-Groove\",\n    \"base_metal_spec\": \"ASTM A36\",\n    \"base_metal_p_no\": \"P-No. 1\",\n    \"filler_sfa_spec\": \"ER70S-6\",\n    \"filler_class_aws\": \"F-No. 6\",\n    \"test_coupon_size\": \"300mm x 150mm x 12mm\",\n    \"positions\": \"1G, 2G, 3G, 4G\",\n    \"testing_variables_and_qualification_limits\": {\n        \"current_range\": \"120-180A\",\n        \"voltage_range\": \"22-28V\",\n        \"travel_speed\": \"150-200mm/min\"\n    },\n    \"tests\": [\n        {\n            \"type\": \"Visual Inspection\",\n            \"test_performed\": true,\n            \"results\": \"Pass - No defects\",\n            \"report_no\": \"VI-2024-001\"\n        },\n        {\n            \"type\": \"Radiographic Test\",\n            \"test_performed\": true,\n            \"results\": \"Pass - No discontinuities\",\n            \"report_no\": \"RT-2024-001\"\n        }\n    ],\n    \"law_name\": \"AWS D1.1\",\n    \"tested_by\": \"Eng. Mohammed Ali\",\n    \"witnessed_by\": \"Inspector Ahmed\"\n}"
+							"raw": "{\n    \"welder_id\": \"{{card_id}}\",\n    \"wps_followed_date\": \"2024-01-10\",\n    \"date_of_issue\": \"2024-01-15\",\n    \"date_of_welding\": \"2024-01-12\",\n    \"joint_weld_type\": \"Butt Joint - Single V-Groove\",\n    \"base_metal_spec\": \"ASTM A36\",\n    \"base_metal_p_no\": \"P-No. 1\",\n    \"filler_sfa_spec\": \"ER70S-6\",\n    \"filler_class_aws\": \"F-No. 6\",\n    \"test_coupon_size\": \"300mm x 150mm x 12mm\",\n    \"positions\": \"1G, 2G, 3G, 4G\",\n    \"testing_variables_and_qualification_limits\": {\n        \"current_range\": \"120-180A\",\n        \"voltage_range\": \"22-28V\",\n        \"travel_speed\": \"150-200mm/min\"\n    },\n    \"tests\": [\n        {\n            \"type\": \"Visual Inspection\",\n            \"test_performed\": true,\n            \"results\": \"Pass - No defects\",\n            \"report_no\": \"VI-2024-001\"\n        },\n        {\n            \"type\": \"Radiographic Test\",\n            \"test_performed\": true,\n            \"results\": \"Pass - No discontinuities\",\n            \"report_no\": \"RT-2024-001\"\n        }\n    ],\n    \"law_name\": \"AWS D1.1\",\n    \"tested_by\": \"Eng. Mohammed Ali\",\n    \"witnessed_by\": \"Inspector Ahmed\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/welder-performance-records/",
@@ -871,7 +871,7 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/welder-performance-records/search/?law_name=AWS D1.1&tested_by=Eng. Mohammed Ali&date_of_welding=2024-01-12&welder_card_id={{card_id}}",
+							"raw": "{{base_url}}/api/welder-performance-records/search/?law_name=AWS D1.1&tested_by=Eng. Mohammed Ali&date_of_welding=2024-01-12&welder_id={{card_id}}",
 							"host": ["{{base_url}}"],
 							"path": ["api", "welder-performance-records", "search", ""],
 							"query": [
@@ -888,8 +888,8 @@
 									"value": "2024-01-12"
 								},
 								{
-									"key": "welder_card_id",
-									"value": "{{card_id}}"
+									"key": "welder_id",
+									"value": "{{welder_id}}"
 								}
 							]
 						}
@@ -1146,7 +1146,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"type\": \"Welding Procedure Qualification\",\n    \"basic_info\": {\n        \"pqr_number\": \"PQR-2024-001\",\n        \"date_qualified\": \"2024-01-15\",\n        \"qualified_by\": \"Dr. Sarah Wilson\",\n        \"approved_by\": \"Eng. Ahmed Hassan\"\n    },\n    \"joints\": {\n        \"joint_type\": \"Butt Joint\",\n        \"joint_design\": \"Single V-Groove\",\n        \"root_face\": \"2mm\",\n        \"bevel_angle\": \"30°\",\n        \"root_opening\": \"3mm\"\n    },\n    \"joint_design_sketch\": \"/media/pqrs/sketches/joint_design_001.jpg\",\n    \"base_metals\": {\n        \"base_metal_1\": {\n            \"specification\": \"ASTM A36\",\n            \"thickness\": \"12mm\",\n            \"p_number\": \"P-No. 1\"\n        },\n        \"base_metal_2\": {\n            \"specification\": \"ASTM A36\",\n            \"thickness\": \"12mm\",\n            \"p_number\": \"P-No. 1\"\n        }\n    },\n    \"filler_metals\": {\n        \"filler_metal_1\": {\n            \"specification\": \"ER70S-6\",\n            \"f_number\": \"F-No. 6\",\n            \"size\": \"1.2mm\"\n        }\n    },\n    \"positions\": {\n        \"welding_position\": \"1G\",\n        \"progression\": \"Up\"\n    },\n    \"preheat\": {\n        \"preheat_temperature\": \"100°C\",\n        \"interpass_temperature\": \"150°C\",\n        \"method\": \"Oxy-fuel torch\"\n    },\n    \"post_weld_heat_treatment\": {\n        \"pwht_temperature\": \"N/A\",\n        \"holding_time\": \"N/A\",\n        \"cooling_rate\": \"N/A\"\n    },\n    \"gas\": {\n        \"shielding_gas\": \"Argon\",\n        \"flow_rate\": \"15 L/min\",\n        \"backing_gas\": \"Argon\",\n        \"backing_flow_rate\": \"10 L/min\"\n    },\n    \"electrical_characteristics\": {\n        \"current_type\": \"DC\",\n        \"polarity\": \"DCEP\",\n        \"current_range\": \"120-150A\",\n        \"voltage_range\": \"22-26V\"\n    },\n    \"techniques\": {\n        \"welding_technique\": \"Stringer beads\",\n        \"oscillation\": \"None\",\n        \"weaving\": \"None\"\n    },\n    \"welding_parameters\": {\n        \"pass_1\": {\n            \"process\": \"GTAW\",\n            \"current\": \"130A\",\n            \"voltage\": \"24V\",\n            \"travel_speed\": \"180mm/min\"\n        },\n        \"pass_2\": {\n            \"process\": \"SMAW\",\n            \"current\": \"140A\",\n            \"voltage\": \"25V\",\n            \"travel_speed\": \"160mm/min\"\n        }\n    },\n    \"tensile_test\": {\n        \"specimen_1\": {\n            \"ultimate_strength\": \"450 MPa\",\n            \"yield_strength\": \"350 MPa\",\n            \"elongation\": \"25%\",\n            \"result\": \"Pass\"\n        }\n    },\n    \"guided_bend_test\": {\n        \"face_bend\": {\n            \"result\": \"Pass\",\n            \"remarks\": \"No cracks or discontinuities\"\n        },\n        \"root_bend\": {\n            \"result\": \"Pass\",\n            \"remarks\": \"No cracks or discontinuities\"\n        }\n    },\n    \"toughness_test\": {\n        \"charpy_v_notch\": {\n            \"temperature\": \"-20°C\",\n            \"energy\": \"45 J\",\n            \"result\": \"Pass\"\n        }\n    },\n    \"fillet_weld_test\": {\n        \"macroscopic_examination\": {\n            \"result\": \"Pass\",\n            \"remarks\": \"Good fusion and penetration\"\n        }\n    },\n    \"other_tests\": {\n        \"hardness_test\": {\n            \"hv_10\": \"220\",\n            \"result\": \"Pass\"\n        }\n    },\n    \"welder_card_id\": \"{{card_id}}\",\n    \"mechanical_testing_conducted_by\": \"Saudi Testing Lab\",\n    \"lab_test_no\": \"STL-2024-001\",\n    \"law_name\": \"AWS D1.1\",\n    \"signatures\": {\n        \"welder\": \"Ahmed Al-Rashid\",\n        \"inspector\": \"Eng. Mohammed Ali\",\n        \"engineer\": \"Dr. Sarah Wilson\",\n        \"date\": \"2024-01-20\"\n    }\n}"
+							"raw": "{\n    \"type\": \"Welding Procedure Qualification\",\n    \"basic_info\": {\n        \"pqr_number\": \"PQR-2024-001\",\n        \"date_qualified\": \"2024-01-15\",\n        \"qualified_by\": \"Dr. Sarah Wilson\",\n        \"approved_by\": \"Eng. Ahmed Hassan\"\n    },\n    \"joints\": {\n        \"joint_type\": \"Butt Joint\",\n        \"joint_design\": \"Single V-Groove\",\n        \"root_face\": \"2mm\",\n        \"bevel_angle\": \"30°\",\n        \"root_opening\": \"3mm\"\n    },\n    \"joint_design_sketch\": \"/media/pqrs/sketches/joint_design_001.jpg\",\n    \"base_metals\": {\n        \"base_metal_1\": {\n            \"specification\": \"ASTM A36\",\n            \"thickness\": \"12mm\",\n            \"p_number\": \"P-No. 1\"\n        },\n        \"base_metal_2\": {\n            \"specification\": \"ASTM A36\",\n            \"thickness\": \"12mm\",\n            \"p_number\": \"P-No. 1\"\n        }\n    },\n    \"filler_metals\": {\n        \"filler_metal_1\": {\n            \"specification\": \"ER70S-6\",\n            \"f_number\": \"F-No. 6\",\n            \"size\": \"1.2mm\"\n        }\n    },\n    \"positions\": {\n        \"welding_position\": \"1G\",\n        \"progression\": \"Up\"\n    },\n    \"preheat\": {\n        \"preheat_temperature\": \"100°C\",\n        \"interpass_temperature\": \"150°C\",\n        \"method\": \"Oxy-fuel torch\"\n    },\n    \"post_weld_heat_treatment\": {\n        \"pwht_temperature\": \"N/A\",\n        \"holding_time\": \"N/A\",\n        \"cooling_rate\": \"N/A\"\n    },\n    \"gas\": {\n        \"shielding_gas\": \"Argon\",\n        \"flow_rate\": \"15 L/min\",\n        \"backing_gas\": \"Argon\",\n        \"backing_flow_rate\": \"10 L/min\"\n    },\n    \"electrical_characteristics\": {\n        \"current_type\": \"DC\",\n        \"polarity\": \"DCEP\",\n        \"current_range\": \"120-150A\",\n        \"voltage_range\": \"22-26V\"\n    },\n    \"techniques\": {\n        \"welding_technique\": \"Stringer beads\",\n        \"oscillation\": \"None\",\n        \"weaving\": \"None\"\n    },\n    \"welding_parameters\": {\n        \"pass_1\": {\n            \"process\": \"GTAW\",\n            \"current\": \"130A\",\n            \"voltage\": \"24V\",\n            \"travel_speed\": \"180mm/min\"\n        },\n        \"pass_2\": {\n            \"process\": \"SMAW\",\n            \"current\": \"140A\",\n            \"voltage\": \"25V\",\n            \"travel_speed\": \"160mm/min\"\n        }\n    },\n    \"tensile_test\": {\n        \"specimen_1\": {\n            \"ultimate_strength\": \"450 MPa\",\n            \"yield_strength\": \"350 MPa\",\n            \"elongation\": \"25%\",\n            \"result\": \"Pass\"\n        }\n    },\n    \"guided_bend_test\": {\n        \"face_bend\": {\n            \"result\": \"Pass\",\n            \"remarks\": \"No cracks or discontinuities\"\n        },\n        \"root_bend\": {\n            \"result\": \"Pass\",\n            \"remarks\": \"No cracks or discontinuities\"\n        }\n    },\n    \"toughness_test\": {\n        \"charpy_v_notch\": {\n            \"temperature\": \"-20°C\",\n            \"energy\": \"45 J\",\n            \"result\": \"Pass\"\n        }\n    },\n    \"fillet_weld_test\": {\n        \"macroscopic_examination\": {\n            \"result\": \"Pass\",\n            \"remarks\": \"Good fusion and penetration\"\n        }\n    },\n    \"other_tests\": {\n        \"hardness_test\": {\n            \"hv_10\": \"220\",\n            \"result\": \"Pass\"\n        }\n    },\n    \"welder_id\": \"{{welder_id}}\",\n    \"mechanical_testing_conducted_by\": \"Saudi Testing Lab\",\n    \"lab_test_no\": \"STL-2024-001\",\n    \"law_name\": \"AWS D1.1\",\n    \"signatures\": {\n        \"welder\": \"Ahmed Al-Rashid\",\n        \"inspector\": \"Eng. Mohammed Ali\",\n        \"engineer\": \"Dr. Sarah Wilson\",\n        \"date\": \"2024-01-20\"\n    }\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/pqrs/",
@@ -1257,7 +1257,7 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/pqrs/search/?law_name=AWS D1.1&lab_test_no=STL-2024-001&type=Welding Procedure Qualification&welder_card_id={{card_id}}",
+							"raw": "{{base_url}}/api/pqrs/search/?law_name=AWS D1.1&lab_test_no=STL-2024-001&type=Welding Procedure Qualification&welder_id={{welder_id}}",
 							"host": ["{{base_url}}"],
 							"path": ["api", "pqrs", "search", ""],
 							"query": [
@@ -1274,8 +1274,8 @@
 									"value": "Welding Procedure Qualification"
 								},
 								{
-									"key": "welder_card_id",
-									"value": "{{card_id}}"
+									"key": "welder_id",
+									"value": "{{welder_id}}"
 								}
 							]
 						}
@@ -1283,7 +1283,7 @@
 					"response": []
 				},
 				{
-					"name": "Get PQRs by Card",
+					"name": "Get PQRs by Welder",
 					"request": {
 						"method": "GET",
 						"header": [
@@ -1293,9 +1293,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/pqrs/by-card/{{card_id}}/",
+							"raw": "{{base_url}}/api/pqrs/by-welder/{{welder_id}}/",
 							"host": ["{{base_url}}"],
-							"path": ["api", "pqrs", "by-card", "{{card_id}}", ""]
+							"path": ["api", "pqrs", "by-welder", "{{welder_id}}", ""]
 						}
 					},
 					"response": []

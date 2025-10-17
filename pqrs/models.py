@@ -26,7 +26,7 @@ class PQR(Document):
     toughness_test = fields.DictField()  # JSON field for toughness test data
     fillet_weld_test = fields.DictField()  # JSON field for fillet weld test data
     other_tests = fields.DictField()  # JSON field for other tests data
-    welder_card_id = fields.ObjectIdField(required=True)  # Reference to WelderCard._id
+    welder_id = fields.ObjectIdField(required=True)  # Reference to Welder._id
     mechanical_testing_conducted_by = fields.StringField(max_length=200, required=True)
     lab_test_no = fields.StringField(max_length=100, required=True)
     law_name = fields.StringField(max_length=200, required=True)
@@ -39,7 +39,7 @@ class PQR(Document):
         'collection': 'pqrs',
         'indexes': [
             'type',
-            'welder_card_id',
+            'welder_id',
             'law_name',
             'mechanical_testing_conducted_by',
             'lab_test_no',
