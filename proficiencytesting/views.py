@@ -451,6 +451,65 @@ def proficiency_test_search(request):
             'status': 'error',
             'message': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@any_authenticated_user
+def proficiency_test_stats(request):
+    """
+    Get proficiency testing statistics
+    GET: Returns statistics about proficiency tests
+    """
+    try:
+        # Get basic counts
+        total_tests = ProficiencyTest.objects(is_active=True).count()
+        scheduled_tests = ProficiencyTest.objects(is_active=True, status='Scheduled').count()
+        in_progress_tests = ProficiencyTest.objects(is_active=True, status='In Progress').count()
+        completed_tests = ProficiencyTest.objects(is_active=True, status='Completed').count()
+        cancelled_tests = ProficiencyTest.objects(is_active=True, status='Cancelled').count()
+        
+        # Get overdue tests
+        overdue_tests = ProficiencyTest.objects(
+            is_active=True,
+            due_date__lt=datetime.now(),
+            status__nin=['Completed', 'Cancelled']
+        ).count()
+        
+        # Get tests due in next 30 days
+        next_30_days = datetime.now() + timedelta(days=30)
+        due_soon_tests = ProficiencyTest.objects(
+            is_active=True,
+            due_date__lte=next_30_days,
+            due_date__gte=datetime.now(),
+            status__nin=['Completed', 'Cancelled']
+        ).count()
+        
+        return JsonResponse({
+            'status': 'success',
+            'data': {
+                'total_tests': total_tests,
+                'scheduled_tests': scheduled_tests,
+                'in_progress_tests': in_progress_tests,
+                'completed_tests': completed_tests,
+                'cancelled_tests': cancelled_tests,
+                'overdue_tests': overdue_tests,
+                'due_soon_tests': due_soon_tests,
+                'completion_rate': round((completed_tests / total_tests * 100), 2) if total_tests > 0 else 0
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@any_authenticated_user
+def proficiency_test_overdue(request):    
     """
     Get overdue proficiency tests
     GET: Returns list of overdue proficiency tests with pagination
