@@ -13,7 +13,7 @@ class TestMethod(Document):
     # Test configuration
     test_columns = fields.ListField(fields.StringField(max_length=100))  # Array of column names
     hasImage = fields.BooleanField(default=False)  # Whether test supports images
-    
+    comments = fields.StringField()  # Comments for the test
     # Legacy/migration fields
     # old_key = fields.StringField(max_length=100)  # For data migration purposes
     

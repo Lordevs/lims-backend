@@ -10,6 +10,7 @@ from clients.models import Client  # Import Client model from clients app
 from mongoengine.errors import DoesNotExist, ValidationError
 from mongoengine import connection
 from authentication.decorators import any_authenticated_user
+from lims_backend.utilities.pagination import get_pagination_params, create_pagination_response, paginate_queryset
 
 
 # ============= UTILITY FUNCTIONS =============
@@ -66,22 +67,83 @@ def job_list(request):
     """
     if request.method == 'GET':
         try:
+            # Get pagination parameters
+            page, limit, offset = get_pagination_params(request)
+            
+            # Get search parameters
+            job_id_search = request.GET.get('job_id', '')
+            project_name_search = request.GET.get('project_name', '')
+            client_name_search = request.GET.get('client_name', '')
+            end_user_search = request.GET.get('end_user', '')
+            received_by_search = request.GET.get('received_by', '')
+            
             # Use raw query to avoid field validation issues with existing data
             from mongoengine import connection
             db = connection.get_db()
             jobs_collection = db.jobs
             
-            jobs = jobs_collection.find({})
+            # Build query based on search parameters
+            query = {}
+            if job_id_search:
+                query['job_id'] = {'$regex': job_id_search, '$options': 'i'}
+            if project_name_search:
+                query['project_name'] = {'$regex': project_name_search, '$options': 'i'}
+            if end_user_search:
+                query['end_user'] = {'$regex': end_user_search, '$options': 'i'}
+            if received_by_search:
+                query['received_by'] = {'$regex': received_by_search, '$options': 'i'}
+            
+            # Handle client name search - need to find client IDs first using raw MongoDB query
+            if client_name_search:
+                try:
+                    clients_collection = db.clients
+                    client_docs = clients_collection.find({
+                        'client_name': {'$regex': client_name_search, '$options': 'i'}
+                    })
+                    client_ids = [doc['_id'] for doc in client_docs]
+                    
+                    if client_ids:
+                        query['client_id'] = {'$in': client_ids}
+                    else:
+                        # No clients found with that name, return empty result
+                        query['client_id'] = {'$in': []}
+                except Exception:
+                    # If there's an error, return empty result
+                    query['client_id'] = {'$in': []}
+            
+            # Get total count for pagination
+            total_records = jobs_collection.count_documents(query)
+            
+            # Get paginated jobs
+            jobs = jobs_collection.find(query).skip(offset).limit(limit).sort('created_at', -1)
             data = []
             
             for job_doc in jobs:
-                # Get client information
+                # Get client information using raw MongoDB query
                 client_name = "Unknown Client"
                 try:
-                    client = Client.objects.get(id=ObjectId(job_doc.get('client_id')))
-                    client_name = client.client_name
-                except (DoesNotExist, Exception):
+                    clients_collection = db.clients
+                    client_obj_id = job_doc.get('client_id')
+                    if client_obj_id:
+                        # Handle both ObjectId and string client_id
+                        if isinstance(client_obj_id, str):
+                            client_obj_id = ObjectId(client_obj_id)
+                        client_doc = clients_collection.find_one({'_id': client_obj_id})
+                        if client_doc:
+                            client_name = client_doc.get('client_name', 'Unknown Client')
+                except Exception:
                     pass
+                
+                # Get sample lots count for this job
+                sample_lots_count = 0
+                try:
+                    sample_lots_collection = db.sample_lots
+                    sample_lots_count = sample_lots_collection.count_documents({
+                        'job_id': job_doc.get('_id'),
+                        '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]
+                    })
+                except Exception:
+                    sample_lots_count = 0
                 
                 # Only access fields that exist in our current model
                 data.append({
@@ -94,15 +156,18 @@ def job_list(request):
                     'receive_date': job_doc.get('receive_date').isoformat() if job_doc.get('receive_date') else '',
                     'received_by': job_doc.get('received_by', ''),
                     'remarks': job_doc.get('remarks', ''),
+                    'sample_lots_count': sample_lots_count,
                     'job_created_at': job_doc.get('job_created_at').isoformat() if job_doc.get('job_created_at') else '',
                     'created_at': job_doc.get('created_at').isoformat() if job_doc.get('created_at') else '',
                     'updated_at': job_doc.get('updated_at').isoformat() if job_doc.get('updated_at') else ''
                 })
             
+            # Create paginated response
+            response_data = create_pagination_response(data, total_records, page, limit)
+            
             return JsonResponse({
                 'status': 'success',
-                'data': data,
-                'total': len(data)
+                **response_data
             })
         except Exception as e:
             return JsonResponse({
@@ -154,7 +219,7 @@ def job_list(request):
                 data['job_id'] = generated_job_id
 
             # Validate required fields
-            required_fields = ['job_id', 'client_id', 'project_name', 'receive_date', 'received_by']
+            required_fields = ['job_id', 'client_id', 'project_name', 'receive_date']
             for field in required_fields:
                 if field not in data or not data[field]:
                     return JsonResponse({
@@ -186,7 +251,7 @@ def job_list(request):
                 project_name=data['project_name'],
                 end_user=data.get('end_user', ''),
                 receive_date=receive_date,
-                received_by=data['received_by'],
+                received_by=data.get('received_by', ''),
                 remarks=data.get('remarks', '')
             )
             job.save()
@@ -252,21 +317,39 @@ def job_detail(request, object_id):
             }, status=404)
         
         if request.method == 'GET':
-            # Get client information
+            # Get client information using raw MongoDB query
             client_name = "Unknown Client"
             client_info = {}
             try:
-                client = Client.objects.get(id=ObjectId(job_doc.get('client_id')))
-                client_name = client.client_name
-                client_info = {
-                    'client_id': str(client.id),
-                    'client_name': client.client_name,
-                    'company_name': client.company_name,
-                    'email': client.email,
-                    'phone': client.phone
-                }
-            except DoesNotExist:
+                clients_collection = db.clients
+                client_obj_id = job_doc.get('client_id')
+                if client_obj_id:
+                    # Handle both ObjectId and string client_id
+                    if isinstance(client_obj_id, str):
+                        client_obj_id = ObjectId(client_obj_id)
+                    client_doc = clients_collection.find_one({'_id': client_obj_id})
+                    if client_doc:
+                        client_name = client_doc.get('client_name', 'Unknown Client')
+                        client_info = {
+                            'client_id': str(client_doc.get('_id', '')),
+                            'client_name': client_doc.get('client_name', ''),
+                            'company_name': client_doc.get('company_name', ''),
+                            'email': client_doc.get('email', ''),
+                            'phone': client_doc.get('phone', '')
+                        }
+            except Exception:
                 pass
+            
+            # Get sample lots count for this job
+            sample_lots_count = 0
+            try:
+                sample_lots_collection = db.sample_lots
+                sample_lots_count = sample_lots_collection.count_documents({
+                    'job_id': job_doc.get('_id'),
+                    '$or': [{'is_active': True}, {'is_active': {'$exists': False}}]
+                })
+            except Exception:
+                sample_lots_count = 0
             
             return JsonResponse({
                 'status': 'success',
@@ -280,6 +363,7 @@ def job_detail(request, object_id):
                     'receive_date': job_doc.get('receive_date').isoformat() if job_doc.get('receive_date') else '',
                     'received_by': job_doc.get('received_by', ''),
                     'remarks': job_doc.get('remarks', ''),
+                    'sample_lots_count': sample_lots_count,
                     'job_created_at': job_doc.get('job_created_at').isoformat() if job_doc.get('job_created_at') else '',
                     'created_at': job_doc.get('created_at').isoformat() if job_doc.get('created_at') else '',
                     'updated_at': job_doc.get('updated_at').isoformat() if job_doc.get('updated_at') else ''
@@ -347,12 +431,19 @@ def job_detail(request, object_id):
                 # Get updated job document
                 updated_job = jobs_collection.find_one({'_id': object_id})
                 
-                # Get updated client name
+                # Get updated client name using raw MongoDB query
                 client_name = "Unknown Client"
                 try:
-                    client = Client.objects.get(id=ObjectId(updated_job.get('client_id')))
-                    client_name = client.client_name
-                except DoesNotExist:
+                    clients_collection = db.clients
+                    client_obj_id = updated_job.get('client_id')
+                    if client_obj_id:
+                        # Handle both ObjectId and string client_id
+                        if isinstance(client_obj_id, str):
+                            client_obj_id = ObjectId(client_obj_id)
+                        client_doc = clients_collection.find_one({'_id': client_obj_id})
+                        if client_doc:
+                            client_name = client_doc.get('client_name', 'Unknown Client')
+                except Exception:
                     pass
                 
                 return JsonResponse({
@@ -437,18 +528,22 @@ def job_search(request):
     """
     Search jobs by various criteria
     Query parameters:
+    - job_id: Search by job ID (case-insensitive)
     - project: Search by project name (case-insensitive)
     - client_id: Search by client ID
     - received_by: Search by received_by field
     """
     try:
         # Get query parameters
+        job_id = request.GET.get('job_id', '')
         project = request.GET.get('project', '')
         client_id = request.GET.get('client_id', '')
         received_by = request.GET.get('received_by', '')
         
         # Build query for raw MongoDB
         query = {}
+        if job_id:
+            query['job_id'] = {'$regex': job_id, '$options': 'i'}
         if project:
             query['project_name'] = {'$regex': project, '$options': 'i'}
         if client_id:
@@ -471,12 +566,19 @@ def job_search(request):
         
         data = []
         for job_doc in jobs:
-            # Get client information
+            # Get client information using raw MongoDB query
             client_name = "Unknown Client"
             try:
-                client = Client.objects.get(id=ObjectId(job_doc.get('client_id')))
-                client_name = client.client_name
-            except (DoesNotExist, Exception):
+                clients_collection = db.clients
+                client_obj_id = job_doc.get('client_id')
+                if client_obj_id:
+                    # Handle both ObjectId and string client_id
+                    if isinstance(client_obj_id, str):
+                        client_obj_id = ObjectId(client_obj_id)
+                    client_doc = clients_collection.find_one({'_id': client_obj_id})
+                    if client_doc:
+                        client_name = client_doc.get('client_name', 'Unknown Client')
+            except Exception:
                 pass
             
             data.append({
@@ -494,6 +596,7 @@ def job_search(request):
             'data': data,
             'total': len(data),
             'filters_applied': {
+                'job_id': job_id,
                 'project': project,
                 'client_id': client_id,
                 'received_by': received_by
@@ -526,6 +629,139 @@ def job_stats(request):
             'status': 'success',
             'data': {
                 'total_jobs': total_jobs
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@any_authenticated_user
+def job_stats_current_month(request):
+    """
+    Get job statistics for the current month
+    """
+    try:
+        from mongoengine import connection
+        from datetime import datetime, timedelta
+        
+        db = connection.get_db()
+        jobs_collection = db.jobs
+        
+        # Get current month start and end dates
+        now = datetime.now()
+        current_month_start = datetime(now.year, now.month, 1)
+        
+        # Calculate next month start (end of current month)
+        if now.month == 12:
+            next_month_start = datetime(now.year + 1, 1, 1)
+        else:
+            next_month_start = datetime(now.year, now.month + 1, 1)
+        
+        # Query for jobs created in current month
+        current_month_query = {
+            'created_at': {
+                '$gte': current_month_start,
+                '$lt': next_month_start
+            }
+        }
+        
+        # Get current month statistics
+        current_month_jobs = jobs_collection.count_documents(current_month_query)
+        
+        # Get jobs by week in current month
+        weekly_stats = []
+        current_date = current_month_start
+        
+        while current_date < next_month_start:
+            week_end = min(current_date + timedelta(days=7), next_month_start)
+            
+            week_query = {
+                'created_at': {
+                    '$gte': current_date,
+                    '$lt': week_end
+                }
+            }
+            
+            week_jobs = jobs_collection.count_documents(week_query)
+            
+            weekly_stats.append({
+                'week_start': current_date.strftime('%Y-%m-%d'),
+                'week_end': (week_end - timedelta(days=1)).strftime('%Y-%m-%d'),
+                'jobs_count': week_jobs
+            })
+            
+            current_date = week_end
+        
+        # Get jobs by day in current month (last 7 days)
+        daily_stats = []
+        for i in range(7):
+            day_start = now - timedelta(days=i)
+            day_end = day_start + timedelta(days=1)
+            
+            day_query = {
+                'created_at': {
+                    '$gte': day_start,
+                    '$lt': day_end
+                }
+            }
+            
+            day_jobs = jobs_collection.count_documents(day_query)
+            
+            daily_stats.append({
+                'date': day_start.strftime('%Y-%m-%d'),
+                'jobs_count': day_jobs
+            })
+        
+        # Get top clients for current month
+        pipeline = [
+            {'$match': current_month_query},
+            {'$group': {'_id': '$client_id', 'jobs_count': {'$sum': 1}}},
+            {'$sort': {'jobs_count': -1}},
+            {'$limit': 5}
+        ]
+        
+        top_clients_raw = list(jobs_collection.aggregate(pipeline))
+        top_clients = []
+        
+        for client_data in top_clients_raw:
+            try:
+                from clients.models import Client
+                client = Client.objects.get(id=ObjectId(client_data['_id']))
+                top_clients.append({
+                    'client_id': str(client.id),
+                    'client_name': client.client_name,
+                    'jobs_count': client_data['jobs_count']
+                })
+            except (DoesNotExist, Exception):
+                top_clients.append({
+                    'client_id': str(client_data['_id']),
+                    'client_name': 'Unknown Client',
+                    'jobs_count': client_data['jobs_count']
+                })
+        
+        # Get total jobs for comparison
+        total_jobs = jobs_collection.count_documents({})
+        
+        return JsonResponse({
+            'status': 'success',
+            'data': {
+                'current_month': {
+                    'month': now.strftime('%Y-%m'),
+                    'month_name': now.strftime('%B %Y'),
+                    'jobs_count': current_month_jobs,
+                    'percentage_of_total': round((current_month_jobs / total_jobs * 100), 2) if total_jobs > 0 else 0
+                },
+                'weekly_breakdown': weekly_stats,
+                'daily_breakdown': daily_stats,
+                'top_clients': top_clients,
+                'total_jobs': total_jobs,
+                'generated_at': now.isoformat()
             }
         })
         

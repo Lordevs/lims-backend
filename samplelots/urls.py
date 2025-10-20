@@ -10,6 +10,7 @@ urlpatterns = [
     # Additional endpoints - these must come BEFORE the detail endpoint
     path('search/', views.sample_lot_search, name='sample_lot_search'),               # GET: Search sample lots
     path('stats/', views.sample_lot_stats, name='sample_lot_stats'),                 # GET: Sample lot statistics
+    path('stats/current-month/', views.sample_lot_stats_current_month, name='sample_lot_stats_current_month'), # GET: Current month stats
     path('job/<str:job_id>/', views.sample_lot_by_job, name='sample_lot_by_job'),    # GET: Sample lots by job
     # path('job/<str:job_id>/delete/', views.delete_sample_lots_by_job, name='delete_sample_lots_by_job'), # DELETE: Cascade delete by job
     

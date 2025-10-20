@@ -39,7 +39,8 @@ class CertificateItem(Document):
     heat_no = fields.StringField(max_length=100)  # Heat Number
     comments = fields.StringField()
     specimen_sections = fields.ListField(fields.EmbeddedDocumentField(SpecimenSection), required=True)
-    
+    equipment_name = fields.StringField(max_length=200)
+    equipment_calibration = fields.StringField(max_length=100)
     # Audit fields
     created_at = fields.DateTimeField(default=datetime.now)
     updated_at = fields.DateTimeField(default=datetime.now)

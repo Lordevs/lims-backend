@@ -16,6 +16,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -28,11 +30,17 @@ urlpatterns = [
     path('api/sample-preparations/', include('samplepreperation.urls')),
     path('api/certificates/', include('certificates.urls')),
     path('api/certificate-items/', include('certificateitems.urls')),
-    path('api/proficiency-testing/', include('proficiencytesting.urls')),
+    path('api/equipment/', include('labequipment.urls')),
+    path('api/proficiency-tests/', include('proficiencytesting.urls')),
+    path('api/calibration-tests/', include('calibrationtesting.urls')),
+    path('api/welders/', include('welders.urls')),
+    path('api/welder-certificates/', include('weldercertificates.urls')),
+    path('api/welder-performance-records/', include('welderperformancerecords.urls')),
+    path('api/welder-cards/', include('weldercards.urls')),
+    path('api/testing-reports/', include('testingreports.urls')),
+    path('api/pqrs/', include('pqrs.urls')),
 ]
 
-# Custom error handlers (return JSON instead of HTML)
-handler404 = 'lims_backend.error_views.handler404'
-handler500 = 'lims_backend.error_views.handler500'
-handler403 = 'lims_backend.error_views.handler403'
-handler400 = 'lims_backend.error_views.handler400'
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

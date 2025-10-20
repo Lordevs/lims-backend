@@ -17,6 +17,7 @@ from .jwt_utils import (
     revoke_all_user_tokens,
     cleanup_expired_tokens
 )
+from lims_backend.utilities.pagination import get_pagination_params, create_pagination_response, paginate_queryset
 
 
 # ============= AUTHENTICATION ENDPOINTS =============
@@ -84,7 +85,7 @@ def login(request):
                 'access_token': access_token,
                 'refresh_token': refresh_token,
                 'token_type': 'Bearer',
-                'expires_in': 900,  # 15 minutes in seconds
+                'expires_in': 300,  # 5 minutes in seconds
                 'refresh_expires_in': 604800,  # 7 days in seconds
                 'user': {
                     'id': str(user.id),
@@ -132,7 +133,7 @@ def register(request):
                 }, status=400)
         
         # Validate role
-        valid_roles = ['admin', 'project_coordinator', 'lab_engg']
+        valid_roles = ['admin', 'project_coordinator', 'lab_engg', 'welding_coordinator']
         if data['role'] not in valid_roles:
             return JsonResponse({
                 'status': 'error',
@@ -252,13 +253,21 @@ def refresh_token(request):
         # Generate new access token
         access_token = generate_access_token(user)
         
+        # Generate new refresh token
+        new_refresh_token, new_refresh_expires_at = generate_refresh_token(user)
+        
+        # Revoke the old refresh token for security
+        revoke_refresh_token(refresh_token)
+        
         return JsonResponse({
             'status': 'success',
             'message': 'Token refreshed successfully',
             'data': {
                 'access_token': access_token,
+                'refresh_token': new_refresh_token,
                 'token_type': 'Bearer',
-                'expires_in': 900  # 15 minutes in seconds
+                'expires_in': 300,  # 5 minutes in seconds
+                'refresh_expires_in': 604800  # 7 days in seconds
             }
         }, status=200)
         
@@ -418,11 +427,15 @@ def user_list(request):
                 'message': 'Admin access required'
             }, status=403)
         
-        # Get all users
-        users = User.objects.all().order_by('-created_at')
+        # Get pagination parameters
+        page, limit, offset = get_pagination_params(request)
+        
+        # Get all users with pagination
+        users_queryset = User.objects.all().order_by('-created_at')
+        paginated_users, total_records = paginate_queryset(users_queryset, page, limit)
         
         data = []
-        for user in users:
+        for user in paginated_users:
             data.append({
                 'id': str(user.id),
                 'username': user.username,
@@ -438,11 +451,13 @@ def user_list(request):
                 'updated_at': user.updated_at.isoformat()
             })
         
+        # Create paginated response
+        response_data = create_pagination_response(data, total_records, page, limit)
+        
         return JsonResponse({
             'status': 'success',
             'message': 'Users retrieved successfully',
-            'data': data,
-            'total': len(data)
+            **response_data
         }, status=200)
         
     except Exception as e:

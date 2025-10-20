@@ -95,3 +95,10 @@ def any_authenticated_user(view_func):
     Decorator to require any authenticated user for endpoints
     """
     return jwt_required()(view_func)
+
+
+def welding_operations_required(view_func):
+    """
+    Decorator for admin or welding coordinator
+    """
+    return jwt_required(['admin', 'welding_coordinator'])(view_func)

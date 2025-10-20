@@ -1,0 +1,1366 @@
+{
+	"info": {
+		"_postman_id": "lims-welder-management",
+		"name": "LIMS Welder Management API",
+		"description": "Complete API collection for LIMS Welder Management System",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"lab@gmail.com\",\n    \"password\": \"12345678\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login", ""]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Welders",
+			"item": [
+				{
+					"name": "Create Welder (Form Data with Image)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "operator_name",
+									"value": "Ahmed Al-Rashid",
+									"type": "text"
+								},
+								{
+									"key": "operator_id",
+									"value": "WELD-001",
+									"type": "text"
+								},
+								{
+									"key": "iqama",
+									"value": "1234567890",
+									"type": "text"
+								},
+								{
+									"key": "is_active",
+									"value": "true",
+									"type": "text"
+								},
+								{
+									"key": "profile_image",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/welders/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welders", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Welder (JSON)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"operator_name\": \"Ahmed Al-Rashid\",\n    \"operator_id\": \"WELD-001\",\n    \"iqama\": \"1234567890\",\n    \"profile_image\": \"\",\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/welders/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welders", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Welders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welders/?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welders", ""],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Welder by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welders/{{welder_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welders", "{{welder_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Welder (Form Data with Image)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "operator_name",
+									"value": "Ahmed Al-Rashid Updated",
+									"type": "text"
+								},
+								{
+									"key": "operator_id",
+									"value": "WELD-001-UPDATED",
+									"type": "text"
+								},
+								{
+									"key": "iqama",
+									"value": "1234567891",
+									"type": "text"
+								},
+								{
+									"key": "is_active",
+									"value": "false",
+									"type": "text"
+								},
+								{
+									"key": "profile_image",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "remove_image",
+									"value": "false",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/welders/{{welder_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welders", "{{welder_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Welder (JSON)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"operator_name\": \"Ahmed Al-Rashid Updated\",\n    \"operator_id\": \"WELD-001-UPDATED\",\n    \"iqama\": \"1234567891\",\n    \"is_active\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/welders/{{welder_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welders", "{{welder_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Welder",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welders/{{welder_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welders", "{{welder_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search Welders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welders/search/?name=Ahmed&operator_id=WELD-001&iqama=1234567890&active=true",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welders", "search", ""],
+							"query": [
+								{
+									"key": "name",
+									"value": "Ahmed"
+								},
+								{
+									"key": "operator_id",
+									"value": "WELD-001"
+								},
+								{
+									"key": "iqama",
+									"value": "1234567890"
+								},
+								{
+									"key": "active",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Welder Statistics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welders/stats/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welders", "stats", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Welder Image",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "profile_image",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/welders/{{welder_id}}/image/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welders", "{{welder_id}}", "image", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Welder Image",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welders/{{welder_id}}/image/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welders", "{{welder_id}}", "image", ""]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Welder Cards",
+			"item": [
+				{
+					"name": "Create Welder Card",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"company\": \"Saudi Aramco\",\n    \"welder_id\": \"{{welder_id}}\",\n    \"authorized_by\": \"John Smith\",\n    \"welding_inspector\": \"Mike Johnson\",\n    \"law_name\": \"AWS D1.1\",\n    \"card_no\": \"CARD-2024-001\",\n    \"attributes\": {\n        \"certification_level\": \"Level 2\",\n        \"valid_until\": \"2025-12-31\",\n        \"specializations\": [\"Pipe Welding\", \"Structural Welding\"]\n    },\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/welder-cards/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-cards", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Welder Cards",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-cards/?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-cards", ""],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Welder Card by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-cards/{{card_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-cards", "{{card_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Welder Card",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"company\": \"Saudi Aramco Updated\",\n    \"attributes\": {\n        \"certification_level\": \"Level 3\",\n        \"valid_until\": \"2026-12-31\",\n        \"specializations\": [\"Pipe Welding\", \"Structural Welding\", \"Pressure Vessel Welding\"]\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/welder-cards/{{card_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-cards", "{{card_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Welder Card",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-cards/{{card_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-cards", "{{card_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search Welder Cards",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-cards/search/?card_no=CARD-2024-001&company=Saudi Aramco&welder_id={{welder_id}}&authorized_by=John Smith",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-cards", "search", ""],
+							"query": [
+								{
+									"key": "card_no",
+									"value": "CARD-2024-001"
+								},
+								{
+									"key": "company",
+									"value": "Saudi Aramco"
+								},
+								{
+									"key": "welder_id",
+									"value": "{{welder_id}}"
+								},
+								{
+									"key": "authorized_by",
+									"value": "John Smith"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Cards by Welder",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-cards/by-welder/{{welder_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-cards", "by-welder", "{{welder_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Welder Card Statistics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-cards/stats/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-cards", "stats", ""]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Welder Certificates",
+			"item": [
+				{
+					"name": "Create Welder Certificate",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"welder_id\": \"{{card_id}}\",\n    \"date_of_test\": \"2024-01-15\",\n    \"identification_of_wps_pqr\": \"WPS-2024-001\",\n    \"qualification_standard\": \"AWS D1.1\",\n    \"base_metal_specification\": \"ASTM A36\",\n    \"joint_type\": \"Butt Joint\",\n    \"weld_type\": \"Single V-Groove\",\n    \"testing_variables_and_qualification_limits\": {\n        \"thickness_range\": \"3-25mm\",\n        \"position\": \"All Positions\",\n        \"filler_metal\": \"ER70S-6\"\n    },\n    \"tests\": [\n        {\n            \"type\": \"Tensile Test\",\n            \"test_performed\": true,\n            \"results\": \"Pass - 450 MPa\",\n            \"report_no\": \"TR-2024-001\"\n        },\n        {\n            \"type\": \"Bend Test\",\n            \"test_performed\": true,\n            \"results\": \"Pass - No cracks\",\n            \"report_no\": \"BR-2024-001\"\n        }\n    ],\n    \"law_name\": \"AWS D1.1\",\n    \"tested_by\": \"Dr. Sarah Wilson\",\n    \"witnessed_by\": \"Eng. Ahmed Hassan\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/welder-certificates/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-certificates", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Certificates",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-certificates/?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-certificates", ""],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Certificate by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-certificates/{{certificate_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-certificates", "{{certificate_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Certificate",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"date_of_test\": \"2024-01-20\",\n    \"tests\": [\n        {\n            \"type\": \"Tensile Test\",\n            \"test_performed\": true,\n            \"results\": \"Pass - 460 MPa\",\n            \"report_no\": \"TR-2024-002\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/welder-certificates/{{certificate_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-certificates", "{{certificate_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Certificate",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-certificates/{{certificate_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-certificates", "{{certificate_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search Certificates",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-certificates/search/?law_name=AWS D1.1&tested_by=Dr. Sarah Wilson&date_of_test=2024-01-15&welder_id={{card_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-certificates", "search", ""],
+							"query": [
+								{
+									"key": "law_name",
+									"value": "AWS D1.1"
+								},
+								{
+									"key": "tested_by",
+									"value": "Dr. Sarah Wilson"
+								},
+								{
+									"key": "date_of_test",
+									"value": "2024-01-15"
+								},
+								{
+									"key": "welder_id",
+									"value": "{{welder_id}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Certificates by Card",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-certificates/by-card/{{card_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-certificates", "by-card", "{{card_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Certificate Statistics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-certificates/stats/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-certificates", "stats", ""]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Welder Performance Records",
+			"item": [
+				{
+					"name": "Create Performance Record",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"welder_id\": \"{{card_id}}\",\n    \"wps_followed_date\": \"2024-01-10\",\n    \"date_of_issue\": \"2024-01-15\",\n    \"date_of_welding\": \"2024-01-12\",\n    \"joint_weld_type\": \"Butt Joint - Single V-Groove\",\n    \"base_metal_spec\": \"ASTM A36\",\n    \"base_metal_p_no\": \"P-No. 1\",\n    \"filler_sfa_spec\": \"ER70S-6\",\n    \"filler_class_aws\": \"F-No. 6\",\n    \"test_coupon_size\": \"300mm x 150mm x 12mm\",\n    \"positions\": \"1G, 2G, 3G, 4G\",\n    \"testing_variables_and_qualification_limits\": {\n        \"current_range\": \"120-180A\",\n        \"voltage_range\": \"22-28V\",\n        \"travel_speed\": \"150-200mm/min\"\n    },\n    \"tests\": [\n        {\n            \"type\": \"Visual Inspection\",\n            \"test_performed\": true,\n            \"results\": \"Pass - No defects\",\n            \"report_no\": \"VI-2024-001\"\n        },\n        {\n            \"type\": \"Radiographic Test\",\n            \"test_performed\": true,\n            \"results\": \"Pass - No discontinuities\",\n            \"report_no\": \"RT-2024-001\"\n        }\n    ],\n    \"law_name\": \"AWS D1.1\",\n    \"tested_by\": \"Eng. Mohammed Ali\",\n    \"witnessed_by\": \"Inspector Ahmed\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/welder-performance-records/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-performance-records", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Performance Records",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-performance-records/?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-performance-records", ""],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Performance Record by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-performance-records/{{record_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-performance-records", "{{record_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Performance Record",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"date_of_welding\": \"2024-01-14\",\n    \"positions\": \"1G, 2G, 3G, 4G, 5G, 6G\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/welder-performance-records/{{record_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-performance-records", "{{record_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Performance Record",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-performance-records/{{record_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-performance-records", "{{record_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search Performance Records",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-performance-records/search/?law_name=AWS D1.1&tested_by=Eng. Mohammed Ali&date_of_welding=2024-01-12&welder_id={{card_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-performance-records", "search", ""],
+							"query": [
+								{
+									"key": "law_name",
+									"value": "AWS D1.1"
+								},
+								{
+									"key": "tested_by",
+									"value": "Eng. Mohammed Ali"
+								},
+								{
+									"key": "date_of_welding",
+									"value": "2024-01-12"
+								},
+								{
+									"key": "welder_id",
+									"value": "{{welder_id}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Records by Card",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-performance-records/by-card/{{card_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-performance-records", "by-card", "{{card_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Performance Record Statistics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/welder-performance-records/stats/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "welder-performance-records", "stats", ""]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Testing Reports",
+			"item": [
+				{
+					"name": "Create Testing Report",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"results\": [\n        {\n            \"welder_id\": \"WELD-001\",\n            \"welder_name\": \"Ahmed Al-Rashid\",\n            \"iqama_number\": \"1234567890\",\n            \"test_coupon_id\": \"TC-2024-001\",\n            \"date_of_inspection\": \"2024-01-15\",\n            \"welding_processes\": \"SMAW, GTAW\",\n            \"type_of_welding\": \"manual\",\n            \"backing\": \"with\",\n            \"type_of_weld_joint\": \"Butt Joint\",\n            \"thickness_product_type\": \"Plate\",\n            \"diameter_of_pipe\": \"N/A\",\n            \"base_metal_p_number\": \"P-No. 1\",\n            \"filler_metal_electrode_spec\": \"E7018\",\n            \"filler_metal_f_number\": \"F-No. 4\",\n            \"filler_metal_addition_deletion\": \"GTAW\",\n            \"deposit_thickness_for_each_process\": \"3mm SMAW, 2mm GTAW\",\n            \"welding_positions\": \"1G, 2G, 3G\",\n            \"vertical_progression\": \"Up\",\n            \"type_of_fuel_gas\": \"N/A\",\n            \"inert_gas_backing\": \"Argon\",\n            \"transfer_mode\": \"N/A\",\n            \"current_type_polarity\": \"DCEP\",\n            \"voltage\": \"24V\",\n            \"current\": \"150A\",\n            \"travel_speed\": \"180mm/min\",\n            \"interpass_temperature\": \"150°C\",\n            \"pre_heat\": \"100°C\",\n            \"post_weld_heat_treatment\": \"N/A\",\n            \"result_status\": \"Pass\"\n        },\n        {\n            \"welder_id\": \"WELD-002\",\n            \"welder_name\": \"Mohammed Hassan\",\n            \"iqama_number\": \"0987654321\",\n            \"test_coupon_id\": \"TC-2024-002\",\n            \"date_of_inspection\": \"2024-01-15\",\n            \"welding_processes\": \"GMAW\",\n            \"type_of_welding\": \"semi-auto\",\n            \"backing\": \"without\",\n            \"type_of_weld_joint\": \"Fillet Joint\",\n            \"thickness_product_type\": \"Pipe\",\n            \"diameter_of_pipe\": \"6 inch\",\n            \"base_metal_p_number\": \"P-No. 1\",\n            \"filler_metal_electrode_spec\": \"ER70S-6\",\n            \"filler_metal_f_number\": \"F-No. 6\",\n            \"filler_metal_addition_deletion\": \"GMAW\",\n            \"deposit_thickness_for_each_process\": \"4mm\",\n            \"welding_positions\": \"1F, 2F, 3F, 4F\",\n            \"vertical_progression\": \"Up\",\n            \"type_of_fuel_gas\": \"N/A\",\n            \"inert_gas_backing\": \"CO2\",\n            \"transfer_mode\": \"spray\",\n            \"current_type_polarity\": \"DCEP\",\n            \"voltage\": \"26V\",\n            \"current\": \"180A\",\n            \"travel_speed\": \"200mm/min\",\n            \"interpass_temperature\": \"120°C\",\n            \"pre_heat\": \"N/A\",\n            \"post_weld_heat_treatment\": \"N/A\",\n            \"result_status\": \"Pass\"\n        }\n    ],\n    \"prepared_by\": \"Dr. Sarah Wilson\",\n    \"client_name\": \"Saudi Aramco\",\n    \"project_details\": \"Pipeline Welding Project - Phase 1\",\n    \"contract_details\": \"Contract No. SA-2024-001, Valid until Dec 2024\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/testing-reports/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "testing-reports", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Testing Reports",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/testing-reports/?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "testing-reports", ""],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Testing Report by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/testing-reports/{{report_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "testing-reports", "{{report_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Testing Report",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"client_name\": \"Saudi Aramco Updated\",\n    \"project_details\": \"Pipeline Welding Project - Phase 2\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/testing-reports/{{report_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "testing-reports", "{{report_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Testing Report",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/testing-reports/{{report_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "testing-reports", "{{report_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search Testing Reports",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/testing-reports/search/?client_name=Saudi Aramco&prepared_by=Dr. Sarah Wilson&welder_name=Ahmed Al-Rashid&welder_id=WELD-001",
+							"host": ["{{base_url}}"],
+							"path": ["api", "testing-reports", "search", ""],
+							"query": [
+								{
+									"key": "client_name",
+									"value": "Saudi Aramco"
+								},
+								{
+									"key": "prepared_by",
+									"value": "Dr. Sarah Wilson"
+								},
+								{
+									"key": "welder_name",
+									"value": "Ahmed Al-Rashid"
+								},
+								{
+									"key": "welder_id",
+									"value": "WELD-001"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Reports by Welder",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/testing-reports/by-welder/WELD-001/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "testing-reports", "by-welder", "WELD-001", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Testing Report Statistics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/testing-reports/stats/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "testing-reports", "stats", ""]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "PQRs",
+			"item": [
+				{
+					"name": "Create PQR",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"type\": \"Welding Procedure Qualification\",\n    \"basic_info\": {\n        \"pqr_number\": \"PQR-2024-001\",\n        \"date_qualified\": \"2024-01-15\",\n        \"qualified_by\": \"Dr. Sarah Wilson\",\n        \"approved_by\": \"Eng. Ahmed Hassan\"\n    },\n    \"joints\": {\n        \"joint_type\": \"Butt Joint\",\n        \"joint_design\": \"Single V-Groove\",\n        \"root_face\": \"2mm\",\n        \"bevel_angle\": \"30°\",\n        \"root_opening\": \"3mm\"\n    },\n    \"joint_design_sketch\": \"/media/pqrs/sketches/joint_design_001.jpg\",\n    \"base_metals\": {\n        \"base_metal_1\": {\n            \"specification\": \"ASTM A36\",\n            \"thickness\": \"12mm\",\n            \"p_number\": \"P-No. 1\"\n        },\n        \"base_metal_2\": {\n            \"specification\": \"ASTM A36\",\n            \"thickness\": \"12mm\",\n            \"p_number\": \"P-No. 1\"\n        }\n    },\n    \"filler_metals\": {\n        \"filler_metal_1\": {\n            \"specification\": \"ER70S-6\",\n            \"f_number\": \"F-No. 6\",\n            \"size\": \"1.2mm\"\n        }\n    },\n    \"positions\": {\n        \"welding_position\": \"1G\",\n        \"progression\": \"Up\"\n    },\n    \"preheat\": {\n        \"preheat_temperature\": \"100°C\",\n        \"interpass_temperature\": \"150°C\",\n        \"method\": \"Oxy-fuel torch\"\n    },\n    \"post_weld_heat_treatment\": {\n        \"pwht_temperature\": \"N/A\",\n        \"holding_time\": \"N/A\",\n        \"cooling_rate\": \"N/A\"\n    },\n    \"gas\": {\n        \"shielding_gas\": \"Argon\",\n        \"flow_rate\": \"15 L/min\",\n        \"backing_gas\": \"Argon\",\n        \"backing_flow_rate\": \"10 L/min\"\n    },\n    \"electrical_characteristics\": {\n        \"current_type\": \"DC\",\n        \"polarity\": \"DCEP\",\n        \"current_range\": \"120-150A\",\n        \"voltage_range\": \"22-26V\"\n    },\n    \"techniques\": {\n        \"welding_technique\": \"Stringer beads\",\n        \"oscillation\": \"None\",\n        \"weaving\": \"None\"\n    },\n    \"welding_parameters\": {\n        \"pass_1\": {\n            \"process\": \"GTAW\",\n            \"current\": \"130A\",\n            \"voltage\": \"24V\",\n            \"travel_speed\": \"180mm/min\"\n        },\n        \"pass_2\": {\n            \"process\": \"SMAW\",\n            \"current\": \"140A\",\n            \"voltage\": \"25V\",\n            \"travel_speed\": \"160mm/min\"\n        }\n    },\n    \"tensile_test\": {\n        \"specimen_1\": {\n            \"ultimate_strength\": \"450 MPa\",\n            \"yield_strength\": \"350 MPa\",\n            \"elongation\": \"25%\",\n            \"result\": \"Pass\"\n        }\n    },\n    \"guided_bend_test\": {\n        \"face_bend\": {\n            \"result\": \"Pass\",\n            \"remarks\": \"No cracks or discontinuities\"\n        },\n        \"root_bend\": {\n            \"result\": \"Pass\",\n            \"remarks\": \"No cracks or discontinuities\"\n        }\n    },\n    \"toughness_test\": {\n        \"charpy_v_notch\": {\n            \"temperature\": \"-20°C\",\n            \"energy\": \"45 J\",\n            \"result\": \"Pass\"\n        }\n    },\n    \"fillet_weld_test\": {\n        \"macroscopic_examination\": {\n            \"result\": \"Pass\",\n            \"remarks\": \"Good fusion and penetration\"\n        }\n    },\n    \"other_tests\": {\n        \"hardness_test\": {\n            \"hv_10\": \"220\",\n            \"result\": \"Pass\"\n        }\n    },\n    \"welder_id\": \"{{welder_id}}\",\n    \"mechanical_testing_conducted_by\": \"Saudi Testing Lab\",\n    \"lab_test_no\": \"STL-2024-001\",\n    \"law_name\": \"AWS D1.1\",\n    \"signatures\": {\n        \"welder\": \"Ahmed Al-Rashid\",\n        \"inspector\": \"Eng. Mohammed Ali\",\n        \"engineer\": \"Dr. Sarah Wilson\",\n        \"date\": \"2024-01-20\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/pqrs/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "pqrs", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All PQRs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/pqrs/?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "pqrs", ""],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get PQR by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/pqrs/{{pqr_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "pqrs", "{{pqr_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update PQR",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"basic_info\": {\n        \"pqr_number\": \"PQR-2024-001-REV1\",\n        \"date_qualified\": \"2024-01-20\",\n        \"qualified_by\": \"Dr. Sarah Wilson\",\n        \"approved_by\": \"Eng. Ahmed Hassan\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/pqrs/{{pqr_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "pqrs", "{{pqr_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete PQR",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/pqrs/{{pqr_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "pqrs", "{{pqr_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search PQRs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/pqrs/search/?law_name=AWS D1.1&lab_test_no=STL-2024-001&type=Welding Procedure Qualification&welder_id={{welder_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "pqrs", "search", ""],
+							"query": [
+								{
+									"key": "law_name",
+									"value": "AWS D1.1"
+								},
+								{
+									"key": "lab_test_no",
+									"value": "STL-2024-001"
+								},
+								{
+									"key": "type",
+									"value": "Welding Procedure Qualification"
+								},
+								{
+									"key": "welder_id",
+									"value": "{{welder_id}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get PQRs by Welder",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/pqrs/by-welder/{{welder_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "pqrs", "by-welder", "{{welder_id}}", ""]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get PQR Statistics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/pqrs/stats/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "pqrs", "stats", ""]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "welder_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "card_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "certificate_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "record_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "report_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "pqr_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

@@ -12,6 +12,7 @@ class User(Document):
         ('admin', 'Admin'),
         ('project_coordinator', 'Project Coordinator'),
         ('lab_engg', 'Lab Engineer'),
+        ('welding_coordinator', 'Welding Coordinator'),
     ]
     
     username = fields.StringField(max_length=100, unique=True, required=True)

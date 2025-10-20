@@ -10,6 +10,7 @@ from mongoengine.errors import DoesNotExist, ValidationError
 
 from .models import TestMethod
 from authentication.decorators import any_authenticated_user
+from lims_backend.utilities.pagination import get_pagination_params, create_pagination_response, paginate_queryset
 
 
 def safe_datetime_format(dt_value):
@@ -44,12 +45,20 @@ def test_method_list(request):
     """
     if request.method == 'GET':
         try:
+            # Get pagination parameters
+            page, limit, offset = get_pagination_params(request)
+            
             # Use raw query to get all active test methods
             db = connection.get_db()
             test_methods_collection = db.test_methods
             
             query = {'$or': [{'is_active': True}, {'is_active': {'$exists': False}}]}
-            test_methods = test_methods_collection.find(query)
+            
+            # Get total count for pagination
+            total_records = test_methods_collection.count_documents(query)
+            
+            # Get paginated test methods
+            test_methods = test_methods_collection.find(query).skip(offset).limit(limit).sort('createdAt', -1)
             data = []
             
             for test_method_doc in test_methods:
@@ -59,14 +68,17 @@ def test_method_list(request):
                     'test_description': test_method_doc.get('test_description', ''),
                     'test_columns': test_method_doc.get('test_columns', []),
                     'hasImage': test_method_doc.get('hasImage', False),
+                    'comments': test_method_doc.get('comments', ''),
                     'createdAt': safe_datetime_format(test_method_doc.get('createdAt')),
                     'updatedAt': safe_datetime_format(test_method_doc.get('updatedAt'))
                 })
             
+            # Create paginated response
+            response_data = create_pagination_response(data, total_records, page, limit)
+            
             return JsonResponse({
                 'status': 'success',
-                'data': data,
-                'total': len(data)
+                **response_data
             })
         except Exception as e:
             return JsonResponse({
@@ -91,7 +103,8 @@ def test_method_list(request):
                 test_name=data['test_name'],
                 test_description=data.get('test_description', ''),
                 test_columns=data.get('test_columns', []),
-                hasImage=data.get('hasImage', False)
+                hasImage=data.get('hasImage', False),
+                comments=data.get('comments', '')
             )
             test_method.save()
             
@@ -100,7 +113,8 @@ def test_method_list(request):
                 'message': 'Test method created successfully',
                 'data': {
                     'id': str(test_method.id),
-                    'test_name': test_method.test_name
+                    'test_name': test_method.test_name,
+                    'comments': test_method.comments
                 }
             }, status=201)
             
@@ -158,6 +172,7 @@ def test_method_detail(request, test_method_id):
                     'test_description': test_method_doc.get('test_description', ''),
                     'test_columns': test_method_doc.get('test_columns', []),
                     'hasImage': test_method_doc.get('hasImage', False),
+                    'comments': test_method_doc.get('comments', ''),
                     'createdAt': safe_datetime_format(test_method_doc.get('createdAt')),
                     'updatedAt': safe_datetime_format(test_method_doc.get('updatedAt'))
                 }}
@@ -171,7 +186,7 @@ def test_method_detail(request, test_method_id):
                 update_doc = {}
                 
                 # Update fields if provided
-                update_fields = ['test_name', 'test_description', 'test_columns', 'hasImage']
+                update_fields = ['test_name', 'test_description', 'test_columns', 'hasImage', 'comments']
                 for field in update_fields:
                     if field in data:
                         update_doc[field] = data[field]
@@ -200,6 +215,7 @@ def test_method_detail(request, test_method_id):
                     'data': {
                         'id': str(updated_test_method.get('_id', '')),
                         'test_name': updated_test_method.get('test_name', ''),
+                        'comments': updated_test_method.get('comments', ''),
                         'updatedAt': safe_datetime_format(updated_test_method.get('updatedAt'))
                     }
                 })
@@ -279,6 +295,7 @@ def test_method_search(request):
                 'test_name': test_method_doc.get('test_name', ''),
                 'test_description': test_method_doc.get('test_description', ''),
                 'hasImage': test_method_doc.get('hasImage', False),
+                'comments': test_method_doc.get('comments', ''),
                 'createdAt': safe_datetime_format(test_method_doc.get('createdAt'))
             })
         

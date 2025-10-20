@@ -10,6 +10,38 @@ from mongoengine.errors import DoesNotExist, ValidationError, NotUniqueError
 
 from .models import Specimen
 from authentication.decorators import any_authenticated_user
+import os
+import shutil
+from django.conf import settings
+
+
+# ============= UTILITY FUNCTIONS =============
+
+def delete_specimen_media_folder(specimen_oid):
+    """
+    Delete the media folder for a specific specimen
+    Args:
+        specimen_oid: ObjectId of the specimen
+    Returns:
+        tuple: (success, message)
+    """
+    try:
+        # Convert ObjectId to string
+        specimen_id_str = str(specimen_oid)
+        
+        # Create the media folder path
+        media_folder_path = os.path.join(settings.MEDIA_ROOT, 'certificate_images', specimen_id_str)
+        
+        # Check if folder exists
+        if os.path.exists(media_folder_path):
+            # Delete the entire folder and its contents
+            shutil.rmtree(media_folder_path)
+            return True, f"Media folder deleted: {media_folder_path}"
+        else:
+            return True, f"No media folder found for specimen: {specimen_id_str}"
+            
+    except Exception as e:
+        return False, f"Error deleting media folder: {str(e)}"
 
 
 # ============= SPECIMEN CRUD ENDPOINTS =============
@@ -236,6 +268,10 @@ def specimen_detail(request, object_id):
                 }, status=400)
         
         elif request.method == 'DELETE':
+            # Delete the specimen's media folder first
+            media_success, media_message = delete_specimen_media_folder(obj_id)
+            
+            # Delete the specimen from database
             result = specimens_collection.delete_one({'_id': obj_id})
             if result.deleted_count == 0:
                 return JsonResponse({
@@ -243,14 +279,21 @@ def specimen_detail(request, object_id):
                     'message': 'Specimen not found'
                 }, status=404)
             
+            # Prepare response data
+            response_data = {
+                'id': str(obj_id),
+                'specimen_id': specimen_doc.get('specimen_id', ''),
+                'deleted_at': datetime.now().isoformat(),
+                'media_cleanup': {
+                    'success': media_success,
+                    'message': media_message
+                }
+            }
+            
             return JsonResponse({
                 'status': 'success',
                 'message': 'Specimen deleted successfully',
-                'data': {
-                    'id': str(obj_id),
-                    'specimen_id': specimen_doc.get('specimen_id', ''),
-                    'deleted_at': datetime.now().isoformat()
-                }
+                'data': response_data
             })
             
     except Exception as e:
@@ -358,6 +401,21 @@ def bulk_delete_specimens(request):
         db = connection.get_db()
         specimens_collection = db.specimens
         
+        # Get specimens to be deleted for media cleanup
+        specimens_to_delete = specimens_collection.find({'specimen_id': {'$in': specimen_ids}})
+        
+        # Delete media folders for each specimen
+        media_cleanup_results = []
+        for specimen_doc in specimens_to_delete:
+            specimen_oid = specimen_doc.get('_id')
+            media_success, media_message = delete_specimen_media_folder(specimen_oid)
+            media_cleanup_results.append({
+                'specimen_id': specimen_doc.get('specimen_id', ''),
+                'object_id': str(specimen_oid),
+                'media_cleanup_success': media_success,
+                'media_cleanup_message': media_message
+            })
+        
         # Delete all specimens with matching specimen_ids
         result = specimens_collection.delete_many(
             {'specimen_id': {'$in': specimen_ids}}
@@ -370,7 +428,8 @@ def bulk_delete_specimens(request):
                 'requested_ids': specimen_ids,
                 'total_requested': len(specimen_ids),
                 'total_deleted': result.deleted_count,
-                'not_found_count': len(specimen_ids) - result.deleted_count
+                'not_found_count': len(specimen_ids) - result.deleted_count,
+                'media_cleanup_results': media_cleanup_results
             }
         })
         

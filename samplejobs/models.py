@@ -11,7 +11,7 @@ class Job(Document):
     project_name = fields.StringField(max_length=200, required=True)
     end_user = fields.StringField(max_length=100)
     receive_date = fields.DateTimeField(required=True)
-    received_by = fields.StringField(max_length=100, required=True)
+    received_by = fields.StringField(max_length=100)
     remarks = fields.StringField()
     job_created_at = fields.DateTimeField(default=datetime.now)
     created_at = fields.DateTimeField(default=datetime.now)
