@@ -1,0 +1,24 @@
+[Unit]
+Description=Gunicorn daemon for LIMS Backend
+After=network.target
+
+[Service]
+Type=notify
+# the specific user that our service will run as
+User=www-data
+Group=www-data
+RuntimeDirectory=gunicorn
+WorkingDirectory=/var/www/myproject/lims-backend
+Environment="PATH=/var/www/myproject/lims-backend/venv/bin"
+EnvironmentFile=/var/www/myproject/lims-backend/.env
+ExecStart=/var/www/myproject/lims-backend/venv/bin/gunicorn \
+          --config /var/www/myproject/lims-backend/gunicorn_config.py \
+          lims_backend.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+

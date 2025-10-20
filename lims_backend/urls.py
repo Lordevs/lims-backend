@@ -28,4 +28,11 @@ urlpatterns = [
     path('api/sample-preparations/', include('samplepreperation.urls')),
     path('api/certificates/', include('certificates.urls')),
     path('api/certificate-items/', include('certificateitems.urls')),
+    path('api/proficiency-testing/', include('proficiencytesting.urls')),
 ]
+
+# Custom error handlers (return JSON instead of HTML)
+handler404 = 'lims_backend.error_views.handler404'
+handler500 = 'lims_backend.error_views.handler500'
+handler403 = 'lims_backend.error_views.handler403'
+handler400 = 'lims_backend.error_views.handler400'
