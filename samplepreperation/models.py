@@ -7,7 +7,6 @@ class SampleLotInfo(EmbeddedDocument):
     """
     Embedded document for sample lot information within sample preparation
     """
-    item_description = fields.StringField(max_length=500, required=True)
     planned_test_date = fields.StringField(max_length=20)  # Date as string (YYYY-MM-DD format) or null
     dimension_spec = fields.StringField(max_length=200)  # Dimension specifications or null
     request_by = fields.StringField(max_length=100)  # Can be null

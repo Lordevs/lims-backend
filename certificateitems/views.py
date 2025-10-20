@@ -674,6 +674,19 @@ def certificate_item_by_certificate(request, certificate_oid):
             specimen_sections_data = []
             
             for section in item_doc.get('specimen_sections', []):
+                # Get specimen information
+                specimen_info = {
+                    'specimen_id': str(section.get('specimen_id', '')),
+                    'specimen_name': 'Unknown'
+                }
+                try:
+                    specimens_collection = db.specimens
+                    specimen_doc = specimens_collection.find_one({'_id': ObjectId(section.get('specimen_id'))})
+                    if specimen_doc:
+                        specimen_info['specimen_name'] = specimen_doc.get('specimen_id', 'Unknown')
+                except Exception:
+                    pass
+                
                 # Get images data with caption field
                 images_data = []
                 for image in section.get('images_list', []):
@@ -685,7 +698,8 @@ def certificate_item_by_certificate(request, certificate_oid):
                 specimen_sections_data.append({
                     'test_results': section.get('test_results', ''),  # Keep as JSON string
                     'images_list': images_data,
-                    'specimen_id': str(section.get('specimen_id'))  # Convert ObjectId to string
+                    'specimen_id': str(section.get('specimen_id')),  # Convert ObjectId to string
+                    'specimen_name': specimen_info['specimen_name']
                 })
             
             data.append({

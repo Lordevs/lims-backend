@@ -130,7 +130,6 @@ def sample_preparation_list(request):
                         specimens_info.append(specimen_data)
                     
                     sample_lots_data.append({
-                        'item_description': sample_lot.get('item_description', ''),
                         'planned_test_date': sample_lot.get('planned_test_date'),
                         'dimension_spec': sample_lot.get('dimension_spec'),
                         'request_by': sample_lot.get('request_by'),
@@ -237,7 +236,7 @@ def sample_preparation_list(request):
             validated_sample_lots = []
             for i, sample_lot_data in enumerate(data['sample_lots']):
                 # Validate required fields for each sample lot
-                sample_lot_required = ['item_description', 'sample_lot_id', 'test_method_oid', 'specimen_oids']
+                sample_lot_required = ['sample_lot_id', 'test_method_oid', 'specimen_oids']
                 for field in sample_lot_required:
                     if field not in sample_lot_data:
                         return JsonResponse({
@@ -303,7 +302,6 @@ def sample_preparation_list(request):
                 
                 # Create validated sample lot info
                 sample_lot_info = SampleLotInfo(
-                    item_description=sample_lot_data['item_description'],
                     planned_test_date=sample_lot_data.get('planned_test_date'),
                     dimension_spec=sample_lot_data.get('dimension_spec'),
                     request_by=sample_lot_data.get('request_by'),
@@ -484,7 +482,6 @@ def sample_preparation_detail(request, object_id):
                     specimens_info.append(specimen_data)
                 
                 sample_lots_data.append({
-                    'item_description': sample_lot.get('item_description', ''),
                     'planned_test_date': sample_lot.get('planned_test_date'),
                     'dimension_spec': sample_lot.get('dimension_spec'),
                     'request_by': sample_lot.get('request_by'),
@@ -557,7 +554,7 @@ def sample_preparation_detail(request, object_id):
                     validated_sample_lots = []
                     for i, sample_lot_data in enumerate(sample_lots_data):
                         # Basic validation
-                        required_fields = ['item_description', 'sample_lot_id', 'test_method_oid', 'specimen_oids']
+                        required_fields = ['sample_lot_id', 'test_method_oid', 'specimen_oids']
                         for field in required_fields:
                             if field not in sample_lot_data:
                                 return JsonResponse({
@@ -757,7 +754,6 @@ def sample_preparation_search(request):
                     specimens_info.append(specimen_data)
                 
                 sample_lots_data.append({
-                    'item_description': sample_lot.get('item_description', ''),
                     'planned_test_date': sample_lot.get('planned_test_date'),
                     'dimension_spec': sample_lot.get('dimension_spec'),
                     'request_by': sample_lot.get('request_by'),
@@ -996,7 +992,6 @@ def sample_preparation_by_job(request, job_oid):
                                 sample_lot_specimens.append(specimen_info)
                             
                             sample_lots_data.append({
-                                'item_description': sample_lot.get('item_description', ''),
                                 'planned_test_date': sample_lot.get('planned_test_date'),
                                 'dimension_spec': sample_lot.get('dimension_spec'),
                                 'request_by': sample_lot.get('request_by'),

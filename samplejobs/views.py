@@ -219,7 +219,7 @@ def job_list(request):
                 data['job_id'] = generated_job_id
 
             # Validate required fields
-            required_fields = ['job_id', 'client_id', 'project_name', 'receive_date', 'received_by']
+            required_fields = ['job_id', 'client_id', 'project_name', 'receive_date']
             for field in required_fields:
                 if field not in data or not data[field]:
                     return JsonResponse({
@@ -251,7 +251,7 @@ def job_list(request):
                 project_name=data['project_name'],
                 end_user=data.get('end_user', ''),
                 receive_date=receive_date,
-                received_by=data['received_by'],
+                received_by=data.get('received_by', ''),
                 remarks=data.get('remarks', '')
             )
             job.save()
