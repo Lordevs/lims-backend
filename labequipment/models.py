@@ -14,13 +14,6 @@ class Equipment(Document):
     status = fields.StringField(
         max_length=50, 
         required=True,
-        choices=[
-            ('Active', 'Active'),
-            ('Inactive', 'Inactive'),
-            ('Maintenance', 'Maintenance'),
-            ('Out of Service', 'Out of Service'),
-            ('Calibration Required', 'Calibration Required')
-        ],
         default='Active'
     )
     

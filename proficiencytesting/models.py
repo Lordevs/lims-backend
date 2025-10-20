@@ -3,14 +3,6 @@ from datetime import datetime
 
 
 class ProficiencyTest(Document):
-    STATUS_CHOICES = [
-        ('Scheduled', 'Scheduled'),
-        ('In Progress', 'In Progress'),
-        ('Completed', 'Completed'),
-        ('Cancelled', 'Cancelled'),
-        ('Overdue', 'Overdue'),
-    ]
-
     description = fields.StringField(max_length=500, required=True)
     due_date = fields.DateTimeField(required=True)
     is_active = fields.BooleanField(default=True)
@@ -19,7 +11,7 @@ class ProficiencyTest(Document):
     provider1 = fields.StringField(max_length=200, required=True)
     provider2 = fields.StringField(max_length=200)
     remarks = fields.StringField(max_length=1000)
-    status = fields.StringField(choices=STATUS_CHOICES, default='Scheduled')
+    status = fields.StringField(max_length=50, default='Scheduled')
     created_at = fields.DateTimeField(default=datetime.now)
     updated_at = fields.DateTimeField(default=datetime.now)
 

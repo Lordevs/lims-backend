@@ -244,7 +244,7 @@ def equipment_detail(request, equipment_id):
                 
                 # Update fields if provided
                 update_fields = [
-                    'equipment_name', 'equipment_serial', 'status', 
+                    'equipment_name', 'equipment_serial', 'status',
                     'created_by', 'updated_by', 'remarks'
                 ]
                 
@@ -415,9 +415,10 @@ def equipment_stats(request):
         # Count total active equipment
         total_equipment = Equipment.objects(is_active=True).count()
         
-        # Count by status
+        # Count by status - get all unique statuses dynamically
         status_stats = {}
-        for status in ['Active', 'Inactive', 'Maintenance', 'Out of Service', 'Calibration Required']:
+        unique_statuses = Equipment.objects(is_active=True).distinct('status')
+        for status in unique_statuses:
             count = Equipment.objects(is_active=True, status=status).count()
             status_stats[status] = count
         
