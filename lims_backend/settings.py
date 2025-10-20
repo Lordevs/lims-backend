@@ -30,12 +30,13 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-igwv3+0(xwh@s7wvvviq6(40#v
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver',"192.168.1.2","0.0.0.0"]
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver',"192.168.1.2","0.0.0.0","72.60.196.229","api.gripcolims.com"]
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://v2.gripcolims.com"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
