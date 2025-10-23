@@ -908,3 +908,116 @@ def bulk_delete_jobs(request):
             'status': 'error',
             'message': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@any_authenticated_user
+def job_with_certificates(request):
+    """
+    Get all jobs with their associated request numbers and certificate numbers
+    
+    Relationship chain:
+    Job → SampleLot (job_id) → SamplePreparation (sample_lot_id) → Certificate (request_id)
+    
+    Returns:
+    - job_id, project_name, client_name
+    - List of request_no (from sample preparations)
+    - List of certificate_id (from certificates)
+    """
+    try:
+        # Get pagination parameters
+        page, limit, offset = get_pagination_params(request)
+        
+        # Get database connection
+        db = connection.get_db()
+        jobs_collection = db.jobs
+        sample_lots_collection = db.sample_lots
+        sample_preparations_collection = db.sample_preparations
+        certificates_collection = db.complete_certificates
+        clients_collection = db.clients
+        
+        # Get all active jobs with pagination
+        total_jobs = jobs_collection.count_documents({})
+        jobs = jobs_collection.find({}).sort('created_at', -1).skip(offset).limit(limit)
+        
+        data = []
+        
+        for job_doc in jobs:
+            job_id = job_doc.get('_id')
+            
+            # Get client name
+            client_name = 'Unknown'
+            try:
+                client_obj_id = job_doc.get('client_id')
+                if client_obj_id:
+                    if isinstance(client_obj_id, str):
+                        client_obj_id = ObjectId(client_obj_id)
+                    client_doc = clients_collection.find_one({'_id': client_obj_id})
+                    if client_doc:
+                        client_name = client_doc.get('client_name', 'Unknown')
+            except Exception:
+                pass
+            
+            # Find all sample lots for this job
+            sample_lots = list(sample_lots_collection.find({'job_id': job_id}))
+            sample_lot_ids = [lot.get('_id') for lot in sample_lots]
+            
+            # Find all sample preparations that contain these sample lots
+            request_numbers = []
+            certificate_numbers = []
+            
+            if sample_lot_ids:
+                # Find sample preparations that have any of these sample lot IDs
+                sample_preparations = sample_preparations_collection.find({
+                    'sample_lots.sample_lot_id': {'$in': sample_lot_ids}
+                })
+                
+                for prep_doc in sample_preparations:
+                    prep_id = prep_doc.get('_id')
+                    request_no = prep_doc.get('request_no', 'Unknown')
+                    
+                    # Add request number if not already added
+                    if request_no not in request_numbers:
+                        request_numbers.append(request_no)
+                    
+                    # Find certificates for this sample preparation
+                    certificates = certificates_collection.find({'request_id': prep_id})
+                    
+                    for cert_doc in certificates:
+                        cert_id = cert_doc.get('certificate_id', 'Unknown')
+                        if cert_id not in certificate_numbers:
+                            certificate_numbers.append(cert_id)
+            
+            data.append({
+                'id': str(job_id),
+                'job_id': job_doc.get('job_id', ''),
+                'project_name': job_doc.get('project_name', ''),
+                'client_name': client_name,
+                'end_user': job_doc.get('end_user', ''),
+                'receive_date': job_doc.get('receive_date').isoformat() if job_doc.get('receive_date') else '',
+                'received_by': job_doc.get('received_by', ''),
+                'sample_lots_count': len(sample_lot_ids),
+                'request_numbers': request_numbers,
+                'certificate_numbers': certificate_numbers,
+                'request_count': len(request_numbers),
+                'certificate_count': len(certificate_numbers),
+                'created_at': job_doc.get('created_at').isoformat() if job_doc.get('created_at') else '',
+                'updated_at': job_doc.get('updated_at').isoformat() if job_doc.get('updated_at') else ''
+            })
+        
+        # Create paginated response
+        response = create_pagination_response(
+            data=data,
+            total=total_jobs,
+            page=page,
+            limit=limit
+        )
+        
+        return JsonResponse(response)
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)

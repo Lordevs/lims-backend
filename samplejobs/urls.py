@@ -12,6 +12,7 @@ urlpatterns = [
     path('stats/', views.job_stats, name='job_stats'),                 # GET: Job statistics
     path('stats/current-month/', views.job_stats_current_month, name='job_stats_current_month'), # GET: Current month stats
     path('bulk-delete/', views.bulk_delete_jobs, name='bulk_delete_jobs'), # DELETE: Bulk delete jobs
+    path('with-certificates/', views.job_with_certificates, name='job_with_certificates'), # GET: Jobs with request numbers and certificates
     path('client/<str:object_id>/', views.job_by_client, name='job_by_client'), # GET: Jobs by client
     
     # Detail endpoint - this must come LAST to avoid conflicts
