@@ -526,33 +526,33 @@ def job_detail(request, object_id):
 @any_authenticated_user
 def job_search(request):
     """
-    Comprehensive search for jobs by various criteria (supports partial matching)
+    Comprehensive search for jobs by various criteria (supports both partial and complete/exact matching)
     
     Query parameters:
-    - job_id: Search by job ID (partial, case-insensitive)
-    - project_name: Search by project name (partial, case-insensitive)
-    - client_name: Search by client name (partial, case-insensitive)
+    - job_id: Search by job ID (partial or complete, case-insensitive)
+    - project_name: Search by project name (partial or complete, case-insensitive)
+    - client_name: Search by client name (partial or complete, case-insensitive)
     - client_id: Search by client ObjectId (exact match)
-    - end_user: Search by end user (partial, case-insensitive)
-    - received_by: Search by received_by field (partial, case-insensitive)
-    - request_no: Search by request number (partial, case-insensitive)
-    - certificate_no: Search by certificate number (partial, case-insensitive)
-    - q: Global search across all text fields (partial, case-insensitive)
+    - end_user: Search by end user (partial or complete, case-insensitive)
+    - received_by: Search by received_by field (partial or complete, case-insensitive)
+    - request_no: Search by request number (partial or complete, case-insensitive)
+    - certificate_no: Search by certificate number (partial or complete, case-insensitive)
+    - q: Global search across all text fields (partial or complete, case-insensitive)
     """
     try:
         # Get pagination parameters
         page, limit, offset = get_pagination_params(request)
         
         # Get query parameters
-        job_id = request.GET.get('job_id', '')
-        project_name = request.GET.get('project_name', '')
-        client_name = request.GET.get('client_name', '')
-        client_id = request.GET.get('client_id', '')
-        end_user = request.GET.get('end_user', '')
-        received_by = request.GET.get('received_by', '')
-        request_no = request.GET.get('request_no', '')
-        certificate_no = request.GET.get('certificate_no', '')
-        global_search = request.GET.get('q', '')  # Global search parameter
+        job_id = request.GET.get('job_id', '').strip()
+        project_name = request.GET.get('project_name', '').strip()
+        client_name = request.GET.get('client_name', '').strip()
+        client_id = request.GET.get('client_id', '').strip()
+        end_user = request.GET.get('end_user', '').strip()
+        received_by = request.GET.get('received_by', '').strip()
+        request_no = request.GET.get('request_no', '').strip()
+        certificate_no = request.GET.get('certificate_no', '').strip()
+        global_search = request.GET.get('q', '').strip()  # Global search parameter
         
         # Get database connection
         db = connection.get_db()
@@ -562,11 +562,18 @@ def job_search(request):
         sample_preparations_collection = db.sample_preparations
         certificates_collection = db.complete_certificates
         
+        # Helper function to escape regex special characters
+        import re
+        def escape_regex(text):
+            """Escape special regex characters for safe pattern matching"""
+            return re.escape(text)
+        
         # Step 1: Filter by request_no if provided
         filtered_job_ids_by_request = None
         if request_no:
+            # Use escaped regex for both partial and exact matching
             sample_preps = sample_preparations_collection.find({
-                'request_no': {'$regex': request_no, '$options': 'i'}
+                'request_no': {'$regex': escape_regex(request_no), '$options': 'i'}
             })
             
             sample_lot_ids = []
@@ -587,8 +594,9 @@ def job_search(request):
         # Step 2: Filter by certificate_no if provided
         filtered_job_ids_by_cert = None
         if certificate_no:
+            # Use escaped regex for both partial and exact matching
             certificates = certificates_collection.find({
-                'certificate_id': {'$regex': certificate_no, '$options': 'i'}
+                'certificate_id': {'$regex': escape_regex(certificate_no), '$options': 'i'}
             })
             
             prep_ids = [cert.get('request_id') for cert in certificates]
@@ -637,20 +645,20 @@ def job_search(request):
             else:
                 query['_id'] = {'$in': []}  # No matches
         
-        # Add direct job field filters
+        # Add direct job field filters (with escaped regex for exact and partial matching)
         if job_id:
-            query['job_id'] = {'$regex': job_id, '$options': 'i'}
+            query['job_id'] = {'$regex': escape_regex(job_id), '$options': 'i'}
         if project_name:
-            query['project_name'] = {'$regex': project_name, '$options': 'i'}
+            query['project_name'] = {'$regex': escape_regex(project_name), '$options': 'i'}
         if end_user:
-            query['end_user'] = {'$regex': end_user, '$options': 'i'}
+            query['end_user'] = {'$regex': escape_regex(end_user), '$options': 'i'}
         if received_by:
-            query['received_by'] = {'$regex': received_by, '$options': 'i'}
+            query['received_by'] = {'$regex': escape_regex(received_by), '$options': 'i'}
         
         # Handle client_name search
         if client_name:
             client_docs = clients_collection.find({
-                'client_name': {'$regex': client_name, '$options': 'i'}
+                'client_name': {'$regex': escape_regex(client_name), '$options': 'i'}
             })
             client_ids = [doc['_id'] for doc in client_docs]
             
@@ -677,17 +685,18 @@ def job_search(request):
         
         # Handle global search (searches across multiple fields)
         if global_search:
+            escaped_search = escape_regex(global_search)
             or_conditions = [
-                {'job_id': {'$regex': global_search, '$options': 'i'}},
-                {'project_name': {'$regex': global_search, '$options': 'i'}},
-                {'end_user': {'$regex': global_search, '$options': 'i'}},
-                {'received_by': {'$regex': global_search, '$options': 'i'}},
-                {'remarks': {'$regex': global_search, '$options': 'i'}}
+                {'job_id': {'$regex': escaped_search, '$options': 'i'}},
+                {'project_name': {'$regex': escaped_search, '$options': 'i'}},
+                {'end_user': {'$regex': escaped_search, '$options': 'i'}},
+                {'received_by': {'$regex': escaped_search, '$options': 'i'}},
+                {'remarks': {'$regex': escaped_search, '$options': 'i'}}
             ]
             
             # Add client name to global search
             client_docs = clients_collection.find({
-                'client_name': {'$regex': global_search, '$options': 'i'}
+                'client_name': {'$regex': escaped_search, '$options': 'i'}
             })
             client_ids = [doc['_id'] for doc in client_docs]
             if client_ids:
