@@ -915,7 +915,7 @@ def job_stats_current_month(request):
                 'jobs_count': day_jobs
             })
         
-        # Get top clients for current month
+        # Get top clients for current monthh
         pipeline = [
             {'$match': current_month_query},
             {'$group': {'_id': '$client_id', 'jobs_count': {'$sum': 1}}},
