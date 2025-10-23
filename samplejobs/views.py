@@ -1009,7 +1009,7 @@ def job_with_certificates(request):
         # Create paginated response
         response = create_pagination_response(
             data=data,
-            total=total_jobs,
+            total_records=total_jobs,
             page=page,
             limit=limit
         )
