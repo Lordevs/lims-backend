@@ -526,26 +526,146 @@ def job_detail(request, object_id):
 @any_authenticated_user
 def job_search(request):
     """
-    Search jobs by various criteria
+    Comprehensive search for jobs by various criteria (supports partial matching)
+    
     Query parameters:
-    - job_id: Search by job ID (case-insensitive)
-    - project: Search by project name (case-insensitive)
-    - client_id: Search by client ID
-    - received_by: Search by received_by field
+    - job_id: Search by job ID (partial, case-insensitive)
+    - project_name: Search by project name (partial, case-insensitive)
+    - client_name: Search by client name (partial, case-insensitive)
+    - client_id: Search by client ObjectId (exact match)
+    - end_user: Search by end user (partial, case-insensitive)
+    - received_by: Search by received_by field (partial, case-insensitive)
+    - request_no: Search by request number (partial, case-insensitive)
+    - certificate_no: Search by certificate number (partial, case-insensitive)
+    - q: Global search across all text fields (partial, case-insensitive)
     """
     try:
+        # Get pagination parameters
+        page, limit, offset = get_pagination_params(request)
+        
         # Get query parameters
         job_id = request.GET.get('job_id', '')
-        project = request.GET.get('project', '')
+        project_name = request.GET.get('project_name', '')
+        client_name = request.GET.get('client_name', '')
         client_id = request.GET.get('client_id', '')
+        end_user = request.GET.get('end_user', '')
         received_by = request.GET.get('received_by', '')
+        request_no = request.GET.get('request_no', '')
+        certificate_no = request.GET.get('certificate_no', '')
+        global_search = request.GET.get('q', '')  # Global search parameter
         
-        # Build query for raw MongoDB
+        # Get database connection
+        db = connection.get_db()
+        jobs_collection = db.jobs
+        clients_collection = db.clients
+        sample_lots_collection = db.sample_lots
+        sample_preparations_collection = db.sample_preparations
+        certificates_collection = db.complete_certificates
+        
+        # Step 1: Filter by request_no if provided
+        filtered_job_ids_by_request = None
+        if request_no:
+            sample_preps = sample_preparations_collection.find({
+                'request_no': {'$regex': request_no, '$options': 'i'}
+            })
+            
+            sample_lot_ids = []
+            for prep in sample_preps:
+                for sample_lot in prep.get('sample_lots', []):
+                    sample_lot_id = sample_lot.get('sample_lot_id')
+                    if sample_lot_id:
+                        sample_lot_ids.append(sample_lot_id)
+            
+            if sample_lot_ids:
+                sample_lots = sample_lots_collection.find({
+                    '_id': {'$in': sample_lot_ids}
+                })
+                filtered_job_ids_by_request = [lot.get('job_id') for lot in sample_lots]
+            else:
+                filtered_job_ids_by_request = []
+        
+        # Step 2: Filter by certificate_no if provided
+        filtered_job_ids_by_cert = None
+        if certificate_no:
+            certificates = certificates_collection.find({
+                'certificate_id': {'$regex': certificate_no, '$options': 'i'}
+            })
+            
+            prep_ids = [cert.get('request_id') for cert in certificates]
+            
+            if prep_ids:
+                sample_preps = sample_preparations_collection.find({
+                    '_id': {'$in': prep_ids}
+                })
+                
+                sample_lot_ids = []
+                for prep in sample_preps:
+                    for sample_lot in prep.get('sample_lots', []):
+                        sample_lot_id = sample_lot.get('sample_lot_id')
+                        if sample_lot_id:
+                            sample_lot_ids.append(sample_lot_id)
+                
+                if sample_lot_ids:
+                    sample_lots = sample_lots_collection.find({
+                        '_id': {'$in': sample_lot_ids}
+                    })
+                    filtered_job_ids_by_cert = [lot.get('job_id') for lot in sample_lots]
+                else:
+                    filtered_job_ids_by_cert = []
+            else:
+                filtered_job_ids_by_cert = []
+        
+        # Step 3: Build job query
         query = {}
+        
+        # Combine filtered job IDs if both request_no and certificate_no are provided
+        if filtered_job_ids_by_request is not None and filtered_job_ids_by_cert is not None:
+            # Intersection of both filters
+            common_job_ids = list(set(filtered_job_ids_by_request) & set(filtered_job_ids_by_cert))
+            if common_job_ids:
+                query['_id'] = {'$in': common_job_ids}
+            else:
+                query['_id'] = {'$in': []}  # No matches
+        elif filtered_job_ids_by_request is not None:
+            if filtered_job_ids_by_request:
+                query['_id'] = {'$in': filtered_job_ids_by_request}
+            else:
+                query['_id'] = {'$in': []}  # No matches
+        elif filtered_job_ids_by_cert is not None:
+            if filtered_job_ids_by_cert:
+                query['_id'] = {'$in': filtered_job_ids_by_cert}
+            else:
+                query['_id'] = {'$in': []}  # No matches
+        
+        # Add direct job field filters
         if job_id:
             query['job_id'] = {'$regex': job_id, '$options': 'i'}
-        if project:
-            query['project_name'] = {'$regex': project, '$options': 'i'}
+        if project_name:
+            query['project_name'] = {'$regex': project_name, '$options': 'i'}
+        if end_user:
+            query['end_user'] = {'$regex': end_user, '$options': 'i'}
+        if received_by:
+            query['received_by'] = {'$regex': received_by, '$options': 'i'}
+        
+        # Handle client_name search
+        if client_name:
+            client_docs = clients_collection.find({
+                'client_name': {'$regex': client_name, '$options': 'i'}
+            })
+            client_ids = [doc['_id'] for doc in client_docs]
+            
+            if client_ids:
+                if '_id' in query:
+                    # Combine with existing _id filter
+                    existing_ids = query['_id'].get('$in', [])
+                    query['_id'] = {'$in': [job_id for job_id in existing_ids if True]}
+                    query['client_id'] = {'$in': client_ids}
+                else:
+                    query['client_id'] = {'$in': client_ids}
+            else:
+                query['client_id'] = {'$in': []}  # No matches
+        
+        # Handle exact client_id match
         if client_id:
             try:
                 query['client_id'] = ObjectId(client_id)
@@ -554,52 +674,120 @@ def job_search(request):
                     'status': 'error',
                     'message': 'Invalid client_id format'
                 }, status=400)
-        if received_by:
-            query['received_by'] = {'$regex': received_by, '$options': 'i'}
         
-        # Use raw query to avoid field validation issues
-        from mongoengine import connection
-        db = connection.get_db()
-        jobs_collection = db.jobs
+        # Handle global search (searches across multiple fields)
+        if global_search:
+            or_conditions = [
+                {'job_id': {'$regex': global_search, '$options': 'i'}},
+                {'project_name': {'$regex': global_search, '$options': 'i'}},
+                {'end_user': {'$regex': global_search, '$options': 'i'}},
+                {'received_by': {'$regex': global_search, '$options': 'i'}},
+                {'remarks': {'$regex': global_search, '$options': 'i'}}
+            ]
+            
+            # Add client name to global search
+            client_docs = clients_collection.find({
+                'client_name': {'$regex': global_search, '$options': 'i'}
+            })
+            client_ids = [doc['_id'] for doc in client_docs]
+            if client_ids:
+                or_conditions.append({'client_id': {'$in': client_ids}})
+            
+            if '_id' in query or 'client_id' in query:
+                # If already filtered, add $or as additional filter
+                query['$and'] = [
+                    {k: v for k, v in query.items() if k != '$and'},
+                    {'$or': or_conditions}
+                ]
+            else:
+                query['$or'] = or_conditions
         
-        jobs = jobs_collection.find(query)
+        # Get total count for pagination
+        total_records = jobs_collection.count_documents(query)
+        
+        # Get paginated jobs
+        jobs = jobs_collection.find(query).skip(offset).limit(limit).sort('created_at', -1)
         
         data = []
         for job_doc in jobs:
-            # Get client information using raw MongoDB query
-            client_name = "Unknown Client"
+            job_obj_id = job_doc.get('_id')
+            
+            # Get client information
+            client_name_result = "Unknown Client"
             try:
-                clients_collection = db.clients
                 client_obj_id = job_doc.get('client_id')
                 if client_obj_id:
-                    # Handle both ObjectId and string client_id
                     if isinstance(client_obj_id, str):
                         client_obj_id = ObjectId(client_obj_id)
                     client_doc = clients_collection.find_one({'_id': client_obj_id})
                     if client_doc:
-                        client_name = client_doc.get('client_name', 'Unknown Client')
+                        client_name_result = client_doc.get('client_name', 'Unknown Client')
             except Exception:
                 pass
+            
+            # Get sample lots count
+            sample_lots_count = sample_lots_collection.count_documents({'job_id': job_obj_id})
+            
+            # Get request numbers for this job
+            sample_lots = list(sample_lots_collection.find({'job_id': job_obj_id}))
+            sample_lot_ids = [lot.get('_id') for lot in sample_lots]
+            
+            request_numbers = []
+            certificate_numbers = []
+            
+            if sample_lot_ids:
+                sample_preparations = sample_preparations_collection.find({
+                    'sample_lots.sample_lot_id': {'$in': sample_lot_ids}
+                })
+                
+                for prep_doc in sample_preparations:
+                    prep_id = prep_doc.get('_id')
+                    req_no = prep_doc.get('request_no', '')
+                    if req_no and req_no not in request_numbers:
+                        request_numbers.append(req_no)
+                    
+                    # Get certificates
+                    certificates = certificates_collection.find({'request_id': prep_id})
+                    for cert_doc in certificates:
+                        cert_id = cert_doc.get('certificate_id', '')
+                        if cert_id and cert_id not in certificate_numbers:
+                            certificate_numbers.append(cert_id)
             
             data.append({
                 'id': str(job_doc.get('_id', '')),
                 'job_id': job_doc.get('job_id', ''),
                 'client_id': str(job_doc.get('client_id', '')),
-                'client_name': client_name,
+                'client_name': client_name_result,
                 'project_name': job_doc.get('project_name', ''),
+                'end_user': job_doc.get('end_user', ''),
                 'receive_date': job_doc.get('receive_date').isoformat() if job_doc.get('receive_date') else '',
-                'received_by': job_doc.get('received_by', '')
+                'received_by': job_doc.get('received_by', ''),
+                'remarks': job_doc.get('remarks', ''),
+                'sample_lots_count': sample_lots_count,
+                'request_numbers': request_numbers,
+                'certificate_numbers': certificate_numbers,
+                'request_count': len(request_numbers),
+                'certificate_count': len(certificate_numbers),
+                'created_at': job_doc.get('created_at').isoformat() if job_doc.get('created_at') else '',
+                'updated_at': job_doc.get('updated_at').isoformat() if job_doc.get('updated_at') else ''
             })
+        
+        # Create paginated response
+        response_data = create_pagination_response(data, total_records, page, limit)
         
         return JsonResponse({
             'status': 'success',
-            'data': data,
-            'total': len(data),
+            **response_data,
             'filters_applied': {
                 'job_id': job_id,
-                'project': project,
+                'project_name': project_name,
+                'client_name': client_name,
                 'client_id': client_id,
-                'received_by': received_by
+                'end_user': end_user,
+                'received_by': received_by,
+                'request_no': request_no,
+                'certificate_no': certificate_no,
+                'global_search': global_search
             }
         })
         
@@ -916,9 +1104,23 @@ def bulk_delete_jobs(request):
 def job_with_certificates(request):
     """
     Get all jobs with their associated request numbers and certificate numbers
+    Supports comprehensive search across all fields
     
     Relationship chain:
     Job → SampleLot (job_id) → SamplePreparation (sample_lot_id) → Certificate (request_id)
+    
+    Query parameters:
+    - job_id: Search by job ID (partial, case-insensitive)
+    - project_name: Search by project name (partial, case-insensitive)
+    - client_name: Search by client name (partial, case-insensitive)
+    - client_id: Search by client ObjectId (exact match)
+    - end_user: Search by end user (partial, case-insensitive)
+    - received_by: Search by received_by field (partial, case-insensitive)
+    - request_no: Search by request number (partial, case-insensitive)
+    - certificate_no: Search by certificate number (partial, case-insensitive)
+    - q: Global search across all text fields (partial, case-insensitive)
+    - page: Page number for pagination
+    - limit: Items per page
     
     Returns:
     - job_id, project_name, client_name
@@ -929,6 +1131,17 @@ def job_with_certificates(request):
         # Get pagination parameters
         page, limit, offset = get_pagination_params(request)
         
+        # Get query parameters
+        job_id_search = request.GET.get('job_id', '')
+        project_name_search = request.GET.get('project_name', '')
+        client_name_search = request.GET.get('client_name', '')
+        client_id_search = request.GET.get('client_id', '')
+        end_user_search = request.GET.get('end_user', '')
+        received_by_search = request.GET.get('received_by', '')
+        request_no_search = request.GET.get('request_no', '')
+        certificate_no_search = request.GET.get('certificate_no', '')
+        global_search = request.GET.get('q', '')
+        
         # Get database connection
         db = connection.get_db()
         jobs_collection = db.jobs
@@ -937,9 +1150,149 @@ def job_with_certificates(request):
         certificates_collection = db.complete_certificates
         clients_collection = db.clients
         
-        # Get all active jobs with pagination
-        total_jobs = jobs_collection.count_documents({})
-        jobs = jobs_collection.find({}).sort('created_at', -1).skip(offset).limit(limit)
+        # Step 1: Filter by request_no if provided
+        filtered_job_ids_by_request = None
+        if request_no_search:
+            sample_preps = sample_preparations_collection.find({
+                'request_no': {'$regex': request_no_search, '$options': 'i'}
+            })
+            
+            sample_lot_ids = []
+            for prep in sample_preps:
+                for sample_lot in prep.get('sample_lots', []):
+                    sample_lot_id = sample_lot.get('sample_lot_id')
+                    if sample_lot_id:
+                        sample_lot_ids.append(sample_lot_id)
+            
+            if sample_lot_ids:
+                sample_lots = sample_lots_collection.find({
+                    '_id': {'$in': sample_lot_ids}
+                })
+                filtered_job_ids_by_request = [lot.get('job_id') for lot in sample_lots]
+            else:
+                filtered_job_ids_by_request = []
+        
+        # Step 2: Filter by certificate_no if provided
+        filtered_job_ids_by_cert = None
+        if certificate_no_search:
+            certificates = certificates_collection.find({
+                'certificate_id': {'$regex': certificate_no_search, '$options': 'i'}
+            })
+            
+            prep_ids = [cert.get('request_id') for cert in certificates]
+            
+            if prep_ids:
+                sample_preps = sample_preparations_collection.find({
+                    '_id': {'$in': prep_ids}
+                })
+                
+                sample_lot_ids = []
+                for prep in sample_preps:
+                    for sample_lot in prep.get('sample_lots', []):
+                        sample_lot_id = sample_lot.get('sample_lot_id')
+                        if sample_lot_id:
+                            sample_lot_ids.append(sample_lot_id)
+                
+                if sample_lot_ids:
+                    sample_lots = sample_lots_collection.find({
+                        '_id': {'$in': sample_lot_ids}
+                    })
+                    filtered_job_ids_by_cert = [lot.get('job_id') for lot in sample_lots]
+                else:
+                    filtered_job_ids_by_cert = []
+            else:
+                filtered_job_ids_by_cert = []
+        
+        # Step 3: Build job query
+        query = {}
+        
+        # Combine filtered job IDs if both request_no and certificate_no are provided
+        if filtered_job_ids_by_request is not None and filtered_job_ids_by_cert is not None:
+            # Intersection of both filters
+            common_job_ids = list(set(filtered_job_ids_by_request) & set(filtered_job_ids_by_cert))
+            if common_job_ids:
+                query['_id'] = {'$in': common_job_ids}
+            else:
+                query['_id'] = {'$in': []}  # No matches
+        elif filtered_job_ids_by_request is not None:
+            if filtered_job_ids_by_request:
+                query['_id'] = {'$in': filtered_job_ids_by_request}
+            else:
+                query['_id'] = {'$in': []}  # No matches
+        elif filtered_job_ids_by_cert is not None:
+            if filtered_job_ids_by_cert:
+                query['_id'] = {'$in': filtered_job_ids_by_cert}
+            else:
+                query['_id'] = {'$in': []}  # No matches
+        
+        # Add direct job field filters
+        if job_id_search:
+            query['job_id'] = {'$regex': job_id_search, '$options': 'i'}
+        if project_name_search:
+            query['project_name'] = {'$regex': project_name_search, '$options': 'i'}
+        if end_user_search:
+            query['end_user'] = {'$regex': end_user_search, '$options': 'i'}
+        if received_by_search:
+            query['received_by'] = {'$regex': received_by_search, '$options': 'i'}
+        
+        # Handle client_name search
+        if client_name_search:
+            client_docs = clients_collection.find({
+                'client_name': {'$regex': client_name_search, '$options': 'i'}
+            })
+            client_ids = [doc['_id'] for doc in client_docs]
+            
+            if client_ids:
+                if '_id' in query:
+                    # Combine with existing _id filter
+                    query['client_id'] = {'$in': client_ids}
+                else:
+                    query['client_id'] = {'$in': client_ids}
+            else:
+                query['client_id'] = {'$in': []}  # No matches
+        
+        # Handle exact client_id match
+        if client_id_search:
+            try:
+                query['client_id'] = ObjectId(client_id_search)
+            except Exception:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invalid client_id format'
+                }, status=400)
+        
+        # Handle global search (searches across multiple fields)
+        if global_search:
+            or_conditions = [
+                {'job_id': {'$regex': global_search, '$options': 'i'}},
+                {'project_name': {'$regex': global_search, '$options': 'i'}},
+                {'end_user': {'$regex': global_search, '$options': 'i'}},
+                {'received_by': {'$regex': global_search, '$options': 'i'}},
+                {'remarks': {'$regex': global_search, '$options': 'i'}}
+            ]
+            
+            # Add client name to global search
+            client_docs = clients_collection.find({
+                'client_name': {'$regex': global_search, '$options': 'i'}
+            })
+            client_ids = [doc['_id'] for doc in client_docs]
+            if client_ids:
+                or_conditions.append({'client_id': {'$in': client_ids}})
+            
+            if '_id' in query or 'client_id' in query:
+                # If already filtered, add $or as additional filter
+                query['$and'] = [
+                    {k: v for k, v in query.items() if k != '$and'},
+                    {'$or': or_conditions}
+                ]
+            else:
+                query['$or'] = or_conditions
+        
+        # Get total count for pagination
+        total_jobs = jobs_collection.count_documents(query)
+        
+        # Get paginated jobs
+        jobs = jobs_collection.find(query).sort('created_at', -1).skip(offset).limit(limit)
         
         data = []
         
@@ -997,6 +1350,7 @@ def job_with_certificates(request):
                 'end_user': job_doc.get('end_user', ''),
                 'receive_date': job_doc.get('receive_date').isoformat() if job_doc.get('receive_date') else '',
                 'received_by': job_doc.get('received_by', ''),
+                'remarks': job_doc.get('remarks', ''),
                 'sample_lots_count': len(sample_lot_ids),
                 'request_numbers': request_numbers,
                 'certificate_numbers': certificate_numbers,
@@ -1014,7 +1368,21 @@ def job_with_certificates(request):
             limit=limit
         )
         
-        return JsonResponse(response)
+        return JsonResponse({
+            'status': 'success',
+            **response,
+            'filters_applied': {
+                'job_id': job_id_search,
+                'project_name': project_name_search,
+                'client_name': client_name_search,
+                'client_id': client_id_search,
+                'end_user': end_user_search,
+                'received_by': received_by_search,
+                'request_no': request_no_search,
+                'certificate_no': certificate_no_search,
+                'global_search': global_search
+            }
+        })
         
     except Exception as e:
         return JsonResponse({
