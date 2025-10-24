@@ -555,9 +555,9 @@ def certificate_detail(request, certificate_oid):
                 # Prepare update document
                 update_doc = {}
                 
-                # Update fields if provided (excluding certificate_id and request_id for integrity)
+                # Update fields if provided (excluding request_id for integrity)
                 update_fields = ['date_of_sampling', 'date_of_testing', 'issue_date', 'revision_no',
-                               'customers_name_no', 'atten', 'customer_po', 'tested_by', 'reviewed_by']
+                               'customers_name_no', 'atten', 'customer_po', 'tested_by', 'reviewed_by', 'certificate_id']
                 for field in update_fields:
                     if field in data:
                         update_doc[field] = data[field]
