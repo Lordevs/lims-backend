@@ -399,6 +399,7 @@ def welder_card_search(request):
     - company: Search by company name (case-insensitive)
     - welder_id: Search by welder ID
     - authorized_by: Search by authorized by field
+    - q: Global search across all text fields (card_no, company, authorized_by, welding_inspector, law_name, welder_name)
     """
     try:
         # Get query parameters
@@ -406,6 +407,7 @@ def welder_card_search(request):
         company = request.GET.get('company', '')
         welder_id = request.GET.get('welder_id', '')
         authorized_by = request.GET.get('authorized_by', '')
+        q = request.GET.get('q', '')  # Global search parameter
         
         # Build query for raw MongoDB
         query = {}
@@ -423,6 +425,38 @@ def welder_card_search(request):
                 }, status=400)
         if authorized_by:
             query['authorized_by'] = {'$regex': authorized_by, '$options': 'i'}
+        
+        # Handle global search parameter 'q'
+        if q:
+            # Create OR conditions for global search across multiple fields
+            or_conditions = [
+                {'card_no': {'$regex': q, '$options': 'i'}},
+                {'company': {'$regex': q, '$options': 'i'}},
+                {'authorized_by': {'$regex': q, '$options': 'i'}},
+                {'welding_inspector': {'$regex': q, '$options': 'i'}},
+                {'law_name': {'$regex': q, '$options': 'i'}}
+            ]
+            
+            # Add welder name to global search
+            try:
+                welders_collection = db.welders
+                welder_docs = welders_collection.find({
+                    'operator_name': {'$regex': q, '$options': 'i'}
+                })
+                welder_ids = [doc['_id'] for doc in welder_docs]
+                if welder_ids:
+                    or_conditions.append({'welder_id': {'$in': welder_ids}})
+            except Exception:
+                pass
+            
+            if query:
+                # If we have other specific filters, combine them with AND
+                query['$and'] = [
+                    {k: v for k, v in query.items() if k != '$and'},
+                    {'$or': or_conditions}
+                ]
+            else:
+                query['$or'] = or_conditions
         
         # Use raw query to avoid field validation issues
         db = connection.get_db()
@@ -465,7 +499,8 @@ def welder_card_search(request):
                 'card_no': card_no,
                 'company': company,
                 'welder_id': welder_id,
-                'authorized_by': authorized_by
+                'authorized_by': authorized_by,
+                'q': q
             }
         })
         

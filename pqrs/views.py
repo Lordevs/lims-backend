@@ -619,6 +619,7 @@ def pqr_search(request):
     - lab_test_no: Search by lab test number (case-insensitive)
     - type: Search by type (case-insensitive)
     - welder_id: Search by welder ID
+    - q: Global search across all text fields (type, lab_test_no, law_name, mechanical_testing_conducted_by, welder_name)
     """
     try:
         # Get query parameters
@@ -626,6 +627,7 @@ def pqr_search(request):
         lab_test_no = request.GET.get('lab_test_no', '')
         type_filter = request.GET.get('type', '')
         welder_id = request.GET.get('welder_id', '')
+        q = request.GET.get('q', '')  # Global search parameter
         
         # Build query for raw MongoDB
         query = {}
@@ -643,6 +645,37 @@ def pqr_search(request):
                     'status': 'error',
                     'message': 'Invalid welder_id format'
                 }, status=400)
+        
+        # Handle global search parameter 'q'
+        if q:
+            # Create OR conditions for global search across multiple fields
+            or_conditions = [
+                {'type': {'$regex': q, '$options': 'i'}},
+                {'lab_test_no': {'$regex': q, '$options': 'i'}},
+                {'law_name': {'$regex': q, '$options': 'i'}},
+                {'mechanical_testing_conducted_by': {'$regex': q, '$options': 'i'}}
+            ]
+            
+            # Add welder name to global search
+            try:
+                welders_collection = db.welders
+                welder_docs = welders_collection.find({
+                    'operator_name': {'$regex': q, '$options': 'i'}
+                })
+                welder_ids = [doc['_id'] for doc in welder_docs]
+                if welder_ids:
+                    or_conditions.append({'welder_id': {'$in': welder_ids}})
+            except Exception:
+                pass
+            
+            if query:
+                # If we have other specific filters, combine them with AND
+                query['$and'] = [
+                    {k: v for k, v in query.items() if k != '$and'},
+                    {'$or': or_conditions}
+                ]
+            else:
+                query['$or'] = or_conditions
         
         # Use raw query to search
         db = connection.get_db()
@@ -670,7 +703,8 @@ def pqr_search(request):
                 'law_name': law_name,
                 'lab_test_no': lab_test_no,
                 'type': type_filter,
-                'welder_id': welder_id
+                'welder_id': welder_id,
+                'q': q
             }
         })
         

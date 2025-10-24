@@ -504,12 +504,14 @@ def welder_certificate_search(request):
     - certificate_no: Search by certificate number (case-insensitive)
     - company: Search by company name (case-insensitive)
     - card_no: Search by card number (case-insensitive)
+    - q: Global search across all text fields (certificate_no, company, qualification_standard, law_name, tested_by, witnessed_by, welder_name)
     """
     try:
         # Get query parameters
         certificate_no = request.GET.get('certificate_no', '')
         company = request.GET.get('company', '')
         card_no = request.GET.get('card_no', '')
+        q = request.GET.get('q', '')  # Global search parameter
         
         # Build query for raw MongoDB
         query = {}
@@ -520,6 +522,53 @@ def welder_certificate_search(request):
         db = connection.get_db()
         certificates_collection = db.welder_certificates
         welder_cards_collection = db.welder_cards
+        
+        # Handle global search parameter 'q'
+        if q:
+            # Create OR conditions for global search across multiple fields
+            or_conditions = [
+                {'certificate_no': {'$regex': q, '$options': 'i'}},
+                {'company': {'$regex': q, '$options': 'i'}},
+                {'card_no': {'$regex': q, '$options': 'i'}},
+            ]
+            
+            # Add welder name to global search
+            try:
+                welders_collection = db.welders
+                welder_docs = welders_collection.find({
+                    'operator_name': {'$regex': q, '$options': 'i'}
+                })
+                welder_ids = [doc['_id'] for doc in welder_docs]
+                if welder_ids:
+                    # Find welder cards for these welders
+                    welder_cards_for_welders = welder_cards_collection.find({
+                        'welder_id': {'$in': welder_ids}
+                    }, {'_id': 1})
+                    welder_card_ids = [card['_id'] for card in welder_cards_for_welders]
+                    if welder_card_ids:
+                        or_conditions.append({'welder_card_id': {'$in': welder_card_ids}})
+            except Exception:
+                pass
+            
+            # Add company to global search
+            try:
+                company_cards = welder_cards_collection.find({
+                    'company': {'$regex': q, '$options': 'i'}
+                }, {'_id': 1})
+                company_card_ids = [card['_id'] for card in company_cards]
+                if company_card_ids:
+                    or_conditions.append({'welder_card_id': {'$in': company_card_ids}})
+            except Exception:
+                pass
+            
+            if query:
+                # If we have other specific filters, combine them with AND
+                query['$and'] = [
+                    {k: v for k, v in query.items() if k != '$and'},
+                    {'$or': or_conditions}
+                ]
+            else:
+                query['$or'] = or_conditions
         
         # Handle company and card_no searches that require joining with welder_cards
         if company or card_no:
@@ -543,7 +592,8 @@ def welder_certificate_search(request):
                     'filters_applied': {
                         'certificate_no': certificate_no,
                         'company': company,
-                        'card_no': card_no
+                        'card_no': card_no,
+                        'q': q
                     }
                 })
             
@@ -627,7 +677,8 @@ def welder_certificate_search(request):
             'filters_applied': {
                 'certificate_no': certificate_no,
                 'company': company,
-                'card_no': card_no
+                'card_no': card_no,
+                'q': q
             }
         })
         

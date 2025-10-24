@@ -656,6 +656,7 @@ def certificate_search(request):
     - customers_name_no: Search by customer name/number (partial match)
     - tested_by: Search by tester name (partial match)
     - issue_date: Search by issue date (exact match)
+    - q: Global search across all text fields (certificate_id, customers_name_no, tested_by, reviewed_by, request_no)
     """
     try:
         # Get query parameters
@@ -663,6 +664,7 @@ def certificate_search(request):
         customer = request.GET.get('customers_name_no', '')
         tester = request.GET.get('tested_by', '')
         issue_date = request.GET.get('issue_date', '')
+        q = request.GET.get('q', '')  # Global search parameter
         
         # Build query for raw MongoDB
         query = {}
@@ -674,6 +676,77 @@ def certificate_search(request):
             query['tested_by'] = {'$regex': tester, '$options': 'i'}
         if issue_date:
             query['issue_date'] = issue_date
+        
+        # Handle global search parameter 'q'
+        if q:
+            # Create OR conditions for global search across multiple fields
+            or_conditions = [
+                {'certificate_id': {'$regex': q, '$options': 'i'}},
+            ]
+            
+            # Add cross-collection search for related data
+            try:
+                # Search in sample preparations for request_no
+                sample_prep_collection = db.sample_preparations
+                matching_sample_preps = sample_prep_collection.find({
+                    'request_no': {'$regex': q, '$options': 'i'}
+                }, {'_id': 1})
+                matching_sample_prep_ids = [prep['_id'] for prep in matching_sample_preps]
+                if matching_sample_prep_ids:
+                    or_conditions.append({'request_id': {'$in': matching_sample_prep_ids}})
+                
+                # Search in sample lots for item_no, sample_type, material_type
+                sample_lots_collection = db.sample_lots
+                matching_sample_lots = sample_lots_collection.find({
+                    '$or': [
+                        {'item_no': {'$regex': q, '$options': 'i'}},
+                    ]
+                }, {'_id': 1})
+                matching_sample_lot_ids = [lot['_id'] for lot in matching_sample_lots]
+                if matching_sample_lot_ids:
+                    # Find sample preparations that use these sample lots
+                    sample_preps_for_lots = sample_prep_collection.find({
+                        'sample_lots.sample_lot_id': {'$in': matching_sample_lot_ids}
+                    }, {'_id': 1})
+                    lot_sample_prep_ids = [prep['_id'] for prep in sample_preps_for_lots]
+                    if lot_sample_prep_ids:
+                        or_conditions.append({'request_id': {'$in': lot_sample_prep_ids}})
+                
+                # Search in jobs for job_id, project_name
+                jobs_collection = db.jobs
+                matching_jobs = jobs_collection.find({
+                    '$or': [
+                        {'job_id': {'$regex': q, '$options': 'i'}},
+                        {'project_name': {'$regex': q, '$options': 'i'}}
+                    ]
+                }, {'_id': 1})
+                matching_job_ids = [job['_id'] for job in matching_jobs]
+                if matching_job_ids:
+                    # Find sample lots for these jobs
+                    sample_lots_for_jobs = sample_lots_collection.find({
+                        'job_id': {'$in': matching_job_ids}
+                    }, {'_id': 1})
+                    job_sample_lot_ids = [lot['_id'] for lot in sample_lots_for_jobs]
+                    if job_sample_lot_ids:
+                        # Find sample preparations that use these sample lots
+                        sample_preps_for_job_lots = sample_prep_collection.find({
+                            'sample_lots.sample_lot_id': {'$in': job_sample_lot_ids}
+                        }, {'_id': 1})
+                        job_sample_prep_ids = [prep['_id'] for prep in sample_preps_for_job_lots]
+                        if job_sample_prep_ids:
+                            or_conditions.append({'request_id': {'$in': job_sample_prep_ids}})
+                
+            except Exception:
+                pass
+            
+            if query:
+                # If we have other specific filters, combine them with AND
+                query['$and'] = [
+                    {k: v for k, v in query.items() if k != '$and'},
+                    {'$or': or_conditions}
+                ]
+            else:
+                query['$or'] = or_conditions
         
         # Use raw query to search
         db = connection.get_db()
@@ -717,7 +790,8 @@ def certificate_search(request):
                 'certificate_id': cert_id,
                 'customers_name_no': customer,
                 'tested_by': tester,
-                'issue_date': issue_date
+                'issue_date': issue_date,
+                'q': q
             }
         })
         

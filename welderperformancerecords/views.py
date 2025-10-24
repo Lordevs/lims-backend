@@ -530,6 +530,7 @@ def welder_performance_record_search(request):
     - date_of_welding: Search by date of welding (exact match)
     - welder_card_id: Search by welder card ID
     - certificate_no: Search by certificate number (case-insensitive)
+    - q: Global search across all text fields (certificate_no, law_name, tested_by, witnessed_by, joint_weld_type, base_metal_spec, welder_name)
     """
     try:
         # Get query parameters
@@ -538,6 +539,7 @@ def welder_performance_record_search(request):
         date_of_welding = request.GET.get('date_of_welding', '')
         welder_card_id = request.GET.get('welder_card_id', '')
         certificate_no = request.GET.get('certificate_no', '')
+        q = request.GET.get('q', '')  # Global search parameter
         
         # Build query for raw MongoDB
         query = {}
@@ -557,6 +559,44 @@ def welder_performance_record_search(request):
                 }, status=400)
         if certificate_no:
             query['certificate_no'] = {'$regex': certificate_no, '$options': 'i'}
+        
+        # Handle global search parameter 'q'
+        if q:
+            # Create OR conditions for global search across multiple fields
+            or_conditions = [
+                {'certificate_no': {'$regex': q, '$options': 'i'}},
+                {'law_name': {'$regex': q, '$options': 'i'}},
+                {'tested_by': {'$regex': q, '$options': 'i'}},
+                {'witnessed_by': {'$regex': q, '$options': 'i'}},
+            ]
+            
+            # Add welder name to global search
+            try:
+                welders_collection = db.welders
+                welder_docs = welders_collection.find({
+                    'operator_name': {'$regex': q, '$options': 'i'}
+                })
+                welder_ids = [doc['_id'] for doc in welder_docs]
+                if welder_ids:
+                    # Find welder cards for these welders
+                    welder_cards_collection = db.welder_cards
+                    welder_cards_for_welders = welder_cards_collection.find({
+                        'welder_id': {'$in': welder_ids}
+                    }, {'_id': 1})
+                    welder_card_ids = [card['_id'] for card in welder_cards_for_welders]
+                    if welder_card_ids:
+                        or_conditions.append({'welder_card_id': {'$in': welder_card_ids}})
+            except Exception:
+                pass
+            
+            if query:
+                # If we have other specific filters, combine them with AND
+                query['$and'] = [
+                    {k: v for k, v in query.items() if k != '$and'},
+                    {'$or': or_conditions}
+                ]
+            else:
+                query['$or'] = or_conditions
         
         # Use raw query to search
         db = connection.get_db()
@@ -588,7 +628,8 @@ def welder_performance_record_search(request):
                 'tested_by': tested_by,
                 'date_of_welding': date_of_welding,
                 'welder_card_id': welder_card_id,
-                'certificate_no': certificate_no
+                'certificate_no': certificate_no,
+                'q': q
             }
         })
         

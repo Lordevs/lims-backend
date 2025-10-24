@@ -562,18 +562,24 @@ def job_search(request):
         sample_preparations_collection = db.sample_preparations
         certificates_collection = db.complete_certificates
         
-        # Helper function to escape regex special characters
+        # Helper function for safe regex pattern matching
         import re
-        def escape_regex(text):
-            """Escape special regex characters for safe pattern matching"""
-            return re.escape(text)
+        def create_safe_regex(text):
+            """Create safe regex pattern for partial matching"""
+            # Only escape characters that could cause regex injection, but allow partial matching
+            # Escape only the most dangerous regex characters while preserving spaces and common characters
+            dangerous_chars = ['^', '$', '\\', '(', ')', '[', ']', '{', '}', '*', '+', '?', '|']
+            safe_text = text
+            for char in dangerous_chars:
+                safe_text = safe_text.replace(char, f'\\{char}')
+            return safe_text
         
         # Step 1: Filter by request_no if provided
         filtered_job_ids_by_request = None
         if request_no:
-            # Use escaped regex for both partial and exact matching
+            # Use safe regex for both partial and exact matching
             sample_preps = sample_preparations_collection.find({
-                'request_no': {'$regex': escape_regex(request_no), '$options': 'i'}
+                'request_no': {'$regex': create_safe_regex(request_no), '$options': 'i'}
             })
             
             sample_lot_ids = []
@@ -594,9 +600,9 @@ def job_search(request):
         # Step 2: Filter by certificate_no if provided
         filtered_job_ids_by_cert = None
         if certificate_no:
-            # Use escaped regex for both partial and exact matching
+            # Use safe regex for both partial and exact matching
             certificates = certificates_collection.find({
-                'certificate_id': {'$regex': escape_regex(certificate_no), '$options': 'i'}
+                'certificate_id': {'$regex': create_safe_regex(certificate_no), '$options': 'i'}
             })
             
             prep_ids = [cert.get('request_id') for cert in certificates]
@@ -645,20 +651,20 @@ def job_search(request):
             else:
                 query['_id'] = {'$in': []}  # No matches
         
-        # Add direct job field filters (with escaped regex for exact and partial matching)
+        # Add direct job field filters (with safe regex for exact and partial matching)
         if job_id:
-            query['job_id'] = {'$regex': escape_regex(job_id), '$options': 'i'}
+            query['job_id'] = {'$regex': create_safe_regex(job_id), '$options': 'i'}
         if project_name:
-            query['project_name'] = {'$regex': escape_regex(project_name), '$options': 'i'}
+            query['project_name'] = {'$regex': create_safe_regex(project_name), '$options': 'i'}
         if end_user:
-            query['end_user'] = {'$regex': escape_regex(end_user), '$options': 'i'}
+            query['end_user'] = {'$regex': create_safe_regex(end_user), '$options': 'i'}
         if received_by:
-            query['received_by'] = {'$regex': escape_regex(received_by), '$options': 'i'}
+            query['received_by'] = {'$regex': create_safe_regex(received_by), '$options': 'i'}
         
         # Handle client_name search
         if client_name:
             client_docs = clients_collection.find({
-                'client_name': {'$regex': escape_regex(client_name), '$options': 'i'}
+                'client_name': {'$regex': create_safe_regex(client_name), '$options': 'i'}
             })
             client_ids = [doc['_id'] for doc in client_docs]
             
@@ -685,7 +691,7 @@ def job_search(request):
         
         # Handle global search (searches across multiple fields)
         if global_search:
-            escaped_search = escape_regex(global_search)
+            escaped_search = create_safe_regex(global_search)
             or_conditions = [
                 {'job_id': {'$regex': escaped_search, '$options': 'i'}},
                 {'project_name': {'$regex': escaped_search, '$options': 'i'}},
@@ -1161,7 +1167,7 @@ def job_with_certificates(request):
         
         # Helper function to escape regex special characters
         import re
-        def escape_regex(text):
+        def create_safe_regex(text):
             """Escape special regex characters for safe pattern matching"""
             return re.escape(text)
         
@@ -1169,7 +1175,7 @@ def job_with_certificates(request):
         filtered_job_ids_by_request = None
         if request_no_search:
             sample_preps = sample_preparations_collection.find({
-                'request_no': {'$regex': escape_regex(request_no_search), '$options': 'i'}
+                'request_no': {'$regex': create_safe_regex(request_no_search), '$options': 'i'}
             })
             
             sample_lot_ids = []
@@ -1191,7 +1197,7 @@ def job_with_certificates(request):
         filtered_job_ids_by_cert = None
         if certificate_no_search:
             certificates = certificates_collection.find({
-                'certificate_id': {'$regex': escape_regex(certificate_no_search), '$options': 'i'}
+                'certificate_id': {'$regex': create_safe_regex(certificate_no_search), '$options': 'i'}
             })
             
             prep_ids = [cert.get('request_id') for cert in certificates]
@@ -1242,18 +1248,18 @@ def job_with_certificates(request):
         
         # Add direct job field filters (with escaped regex for exact and partial matching)
         if job_id_search:
-            query['job_id'] = {'$regex': escape_regex(job_id_search), '$options': 'i'}
+            query['job_id'] = {'$regex': create_safe_regex(job_id_search), '$options': 'i'}
         if project_name_search:
-            query['project_name'] = {'$regex': escape_regex(project_name_search), '$options': 'i'}
+            query['project_name'] = {'$regex': create_safe_regex(project_name_search), '$options': 'i'}
         if end_user_search:
-            query['end_user'] = {'$regex': escape_regex(end_user_search), '$options': 'i'}
+            query['end_user'] = {'$regex': create_safe_regex(end_user_search), '$options': 'i'}
         if received_by_search:
-            query['received_by'] = {'$regex': escape_regex(received_by_search), '$options': 'i'}
+            query['received_by'] = {'$regex': create_safe_regex(received_by_search), '$options': 'i'}
         
         # Handle client_name search
         if client_name_search:
             client_docs = clients_collection.find({
-                'client_name': {'$regex': escape_regex(client_name_search), '$options': 'i'}
+                'client_name': {'$regex': create_safe_regex(client_name_search), '$options': 'i'}
             })
             client_ids = [doc['_id'] for doc in client_docs]
             
@@ -1278,7 +1284,7 @@ def job_with_certificates(request):
         
         # Handle global search (searches across multiple fields)
         if global_search:
-            escaped_search = escape_regex(global_search)
+            escaped_search = create_safe_regex(global_search)
             or_conditions = [
                 {'job_id': {'$regex': escaped_search, '$options': 'i'}},
                 {'project_name': {'$regex': escaped_search, '$options': 'i'}},

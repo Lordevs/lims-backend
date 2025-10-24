@@ -492,6 +492,7 @@ def welder_search(request):
     - operator_id: Search by operator ID
     - iqama: Search by iqama number
     - active: Filter by active status (true/false)
+    - q: Global search across all text fields (operator_name, operator_id, iqama)
     """
     try:
         # Get query parameters
@@ -499,6 +500,7 @@ def welder_search(request):
         operator_id = request.GET.get('operator_id', '')
         iqama = request.GET.get('iqama', '')
         active = request.GET.get('active', '')
+        q = request.GET.get('q', '')  # Global search parameter
         
         # Build query
         query = {}
@@ -511,7 +513,19 @@ def welder_search(request):
         if active:
             query['is_active'] = active.lower() == 'true'
         
-        welders = Welder.objects.filter(**query)
+        # Handle global search parameter 'q'
+        if q:
+            # Create OR conditions for global search across multiple fields using MongoEngine syntax
+            from mongoengine import Q
+            global_query = Q(operator_name__icontains=q) | Q(operator_id__icontains=q) | Q(iqama__icontains=q)
+            
+            # If we have other specific filters, combine them with AND
+            if query:
+                welders = Welder.objects.filter(**query).filter(global_query)
+            else:
+                welders = Welder.objects.filter(global_query)
+        else:
+            welders = Welder.objects.filter(**query)
         
         data = []
         for welder in welders:
@@ -535,7 +549,8 @@ def welder_search(request):
                 'name': name,
                 'operator_id': operator_id,
                 'iqama': iqama,
-                'active': active
+                'active': active,
+                'q': q
             }
         })
         

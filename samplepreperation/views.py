@@ -640,11 +640,13 @@ def sample_preparation_search(request):
     Query parameters:
     - request_no: Search by request number (partial match)
     - request_by: Search by requester name (partial match)
+    - q: Global search across all text fields (request_no, request_by, item_no, sample_type, material_type, job_id, client_name, project_name, test_name, specimen_id)
     """
     try:
         # Get query parameters
         request_no_query = request.GET.get('request_no', '')
         request_by_query = request.GET.get('request_by', '')
+        q = request.GET.get('q', '')  # Global search parameter
         
         # Build query for raw MongoDB
         query = {}
@@ -652,6 +654,56 @@ def sample_preparation_search(request):
             query['request_no'] = {'$regex': request_no_query, '$options': 'i'}
         if request_by_query:
             query['sample_lots.request_by'] = {'$regex': request_by_query, '$options': 'i'}
+        
+        # Handle global search parameter 'q'
+        if q:
+            # Create OR conditions for global search across multiple fields
+            or_conditions = [
+                {'request_no': {'$regex': q, '$options': 'i'}},
+            ]
+            
+            # Add cross-collection search for related data
+            try:
+                # Search in sample lots for item_no, sample_type, material_type
+                sample_lots_collection = db.sample_lots
+                matching_sample_lots = sample_lots_collection.find({
+                    '$or': [
+                        {'item_no': {'$regex': q, '$options': 'i'}},
+                    ]
+                }, {'_id': 1})
+                matching_sample_lot_ids = [lot['_id'] for lot in matching_sample_lots]
+                if matching_sample_lot_ids:
+                    or_conditions.append({'sample_lots.sample_lot_id': {'$in': matching_sample_lot_ids}})
+                
+                # Search in jobs for job_id, project_name
+                jobs_collection = db.jobs
+                matching_jobs = jobs_collection.find({
+                    '$or': [
+                        {'job_id': {'$regex': q, '$options': 'i'}},
+                        {'project_name': {'$regex': q, '$options': 'i'}},
+                    ]
+                }, {'_id': 1})
+                matching_job_ids = [job['_id'] for job in matching_jobs]
+                if matching_job_ids:
+                    # Find sample lots for these jobs
+                    sample_lots_for_jobs = sample_lots_collection.find({
+                        'job_id': {'$in': matching_job_ids}
+                    }, {'_id': 1})
+                    job_sample_lot_ids = [lot['_id'] for lot in sample_lots_for_jobs]
+                    if job_sample_lot_ids:
+                        or_conditions.append({'sample_lots.sample_lot_id': {'$in': job_sample_lot_ids}})
+                    
+            except Exception:
+                pass
+            
+            if query:
+                # If we have other specific filters, combine them with AND
+                query['$and'] = [
+                    {k: v for k, v in query.items() if k != '$and'},
+                    {'$or': or_conditions}
+                ]
+            else:
+                query['$or'] = or_conditions
         
         # Use raw query to search
         db = connection.get_db()
@@ -783,7 +835,8 @@ def sample_preparation_search(request):
             'total': len(data),
             'filters_applied': {
                 'request_no': request_no_query,
-                'request_by': request_by_query
+                'request_by': request_by_query,
+                'q': q
             }
         })
         
