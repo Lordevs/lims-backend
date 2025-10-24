@@ -536,7 +536,10 @@ def welder_certificate_search(request):
             try:
                 welders_collection = db.welders
                 welder_docs = welders_collection.find({
-                    'operator_name': {'$regex': q, '$options': 'i'}
+                    '$or': [
+                        {'operator_name': {'$regex': q, '$options': 'i'}},
+                        {'operator_id': {'$regex': q, '$options': 'i'}}
+                    ]
                 })
                 welder_ids = [doc['_id'] for doc in welder_docs]
                 if welder_ids:

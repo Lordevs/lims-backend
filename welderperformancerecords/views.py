@@ -533,48 +533,32 @@ def welder_performance_record_search(request):
     - q: Global search across all text fields (certificate_no, law_name, tested_by, witnessed_by, joint_weld_type, base_metal_spec, welder_name)
     """
     try:
-        # Get query parameters
-        law_name = request.GET.get('law_name', '')
-        tested_by = request.GET.get('tested_by', '')
-        date_of_welding = request.GET.get('date_of_welding', '')
-        welder_card_id = request.GET.get('welder_card_id', '')
         certificate_no = request.GET.get('certificate_no', '')
         q = request.GET.get('q', '')  # Global search parameter
         
         # Build query for raw MongoDB
         query = {}
-        if law_name:
-            query['law_name'] = {'$regex': law_name, '$options': 'i'}
-        if tested_by:
-            query['tested_by'] = {'$regex': tested_by, '$options': 'i'}
-        if date_of_welding:
-            query['date_of_welding'] = date_of_welding
-        if welder_card_id:
-            try:
-                query['welder_card_id'] = ObjectId(welder_card_id)
-            except Exception:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Invalid welder_card_id format'
-                }, status=400)
         if certificate_no:
             query['certificate_no'] = {'$regex': certificate_no, '$options': 'i'}
+        
+        # Use raw query to search
+        db = connection.get_db()
         
         # Handle global search parameter 'q'
         if q:
             # Create OR conditions for global search across multiple fields
             or_conditions = [
                 {'certificate_no': {'$regex': q, '$options': 'i'}},
-                {'law_name': {'$regex': q, '$options': 'i'}},
-                {'tested_by': {'$regex': q, '$options': 'i'}},
-                {'witnessed_by': {'$regex': q, '$options': 'i'}},
             ]
             
             # Add welder name to global search
             try:
                 welders_collection = db.welders
                 welder_docs = welders_collection.find({
-                    'operator_name': {'$regex': q, '$options': 'i'}
+                    '$or': [
+                        {'operator_name': {'$regex': q, '$options': 'i'}},
+                        {'operator_id': {'$regex': q, '$options': 'i'}}
+                    ]
                 })
                 welder_ids = [doc['_id'] for doc in welder_docs]
                 if welder_ids:
@@ -598,25 +582,80 @@ def welder_performance_record_search(request):
             else:
                 query['$or'] = or_conditions
         
-        # Use raw query to search
-        db = connection.get_db()
         performance_records_collection = db.welder_performance_records
         
         performance_records = performance_records_collection.find(query)
         
         data = []
         for record_doc in performance_records:
+            # Get welder card and welder information
+            welder_card_info = {
+                'card_id': str(record_doc.get('welder_card_id', '')),
+                'card_no': 'Unknown',
+                'company': 'Unknown',
+                'welder_info': {
+                    'welder_id': '',
+                    'operator_name': 'Unknown Welder',
+                    'operator_id': '',
+                    'iqama': ''
+                }
+            }
+            
+            try:
+                # Get welder card information
+                welder_cards_collection = db.welder_cards
+                card_obj_id = record_doc.get('welder_card_id')
+                if card_obj_id:
+                    if isinstance(card_obj_id, str):
+                        card_obj_id = ObjectId(card_obj_id)
+                    card_doc = welder_cards_collection.find_one({'_id': card_obj_id})
+                    if card_doc:
+                        welder_card_info.update({
+                            'card_no': card_doc.get('card_no', 'Unknown'),
+                            'company': card_doc.get('company', 'Unknown')
+                        })
+                        
+                        # Get welder information
+                        welder_obj_id = card_doc.get('welder_id')
+                        if welder_obj_id:
+                            if isinstance(welder_obj_id, str):
+                                welder_obj_id = ObjectId(welder_obj_id)
+                            welders_collection = db.welders
+                            welder_doc = welders_collection.find_one({'_id': welder_obj_id})
+                            if welder_doc:
+                                welder_card_info['welder_info'] = {
+                                    'welder_id': str(welder_doc.get('_id', '')),
+                                    'operator_name': welder_doc.get('operator_name', 'Unknown Welder'),
+                                    'operator_id': welder_doc.get('operator_id', ''),
+                                    'iqama': welder_doc.get('iqama', '')
+                                }
+            except Exception:
+                pass
+            
             data.append({
                 'id': str(record_doc.get('_id', '')),
+                'welder_card_id': str(record_doc.get('welder_card_id', '')),
+                'welder_card_info': welder_card_info,
                 'certificate_no': record_doc.get('certificate_no', ''),
-                'law_name': record_doc.get('law_name', ''),
+                'wps_followed_date': record_doc.get('wps_followed_date', ''),
+                'date_of_issue': record_doc.get('date_of_issue', ''),
                 'date_of_welding': record_doc.get('date_of_welding', ''),
-                'tested_by': record_doc.get('tested_by', ''),
-                'witnessed_by': record_doc.get('witnessed_by', ''),
                 'joint_weld_type': record_doc.get('joint_weld_type', ''),
                 'base_metal_spec': record_doc.get('base_metal_spec', ''),
+                'base_metal_p_no': record_doc.get('base_metal_p_no', ''),
+                'filler_sfa_spec': record_doc.get('filler_sfa_spec', ''),
+                'filler_class_aws': record_doc.get('filler_class_aws', ''),
+                'test_coupon_size': record_doc.get('test_coupon_size', ''),
+                'positions': record_doc.get('positions', ''),
+                'testing_variables_and_qualification_limits_automatic': record_doc.get('testing_variables_and_qualification_limits_automatic', []),
+                'testing_variables_and_qualification_limits_machine': record_doc.get('testing_variables_and_qualification_limits_machine', []),
+                'tests': record_doc.get('tests', []),
+                'law_name': record_doc.get('law_name', ''),
+                'tested_by': record_doc.get('tested_by', ''),
+                'witnessed_by': record_doc.get('witnessed_by', ''),
                 'is_active': record_doc.get('is_active', True),
-                'created_at': record_doc.get('created_at').isoformat() if record_doc.get('created_at') else ''
+                'created_at': record_doc.get('created_at').isoformat() if record_doc.get('created_at') else '',
+                'updated_at': record_doc.get('updated_at').isoformat() if record_doc.get('updated_at') else ''
             })
         
         return JsonResponse({
@@ -624,10 +663,6 @@ def welder_performance_record_search(request):
             'data': data,
             'total': len(data),
             'filters_applied': {
-                'law_name': law_name,
-                'tested_by': tested_by,
-                'date_of_welding': date_of_welding,
-                'welder_card_id': welder_card_id,
                 'certificate_no': certificate_no,
                 'q': q
             }
