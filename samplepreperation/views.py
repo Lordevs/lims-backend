@@ -655,6 +655,9 @@ def sample_preparation_search(request):
         if request_by_query:
             query['sample_lots.request_by'] = {'$regex': request_by_query, '$options': 'i'}
         
+        # Use raw query to search
+        db = connection.get_db()
+        
         # Handle global search parameter 'q'
         if q:
             # Create OR conditions for global search across multiple fields
@@ -664,35 +667,62 @@ def sample_preparation_search(request):
             
             # Add cross-collection search for related data
             try:
-                # Search in sample lots for item_no, sample_type, material_type
-                sample_lots_collection = db.sample_lots
-                matching_sample_lots = sample_lots_collection.find({
-                    '$or': [
-                        {'item_no': {'$regex': q, '$options': 'i'}},
-                    ]
-                }, {'_id': 1})
-                matching_sample_lot_ids = [lot['_id'] for lot in matching_sample_lots]
-                if matching_sample_lot_ids:
-                    or_conditions.append({'sample_lots.sample_lot_id': {'$in': matching_sample_lot_ids}})
-                
                 # Search in jobs for job_id, project_name
                 jobs_collection = db.jobs
                 matching_jobs = jobs_collection.find({
                     '$or': [
                         {'job_id': {'$regex': q, '$options': 'i'}},
-                        {'project_name': {'$regex': q, '$options': 'i'}},
+                        {'project_name': {'$regex': q, '$options': 'i'}}
                     ]
                 }, {'_id': 1})
                 matching_job_ids = [job['_id'] for job in matching_jobs]
                 if matching_job_ids:
                     # Find sample lots for these jobs
+                    sample_lots_collection = db.sample_lots
                     sample_lots_for_jobs = sample_lots_collection.find({
                         'job_id': {'$in': matching_job_ids}
                     }, {'_id': 1})
                     job_sample_lot_ids = [lot['_id'] for lot in sample_lots_for_jobs]
                     if job_sample_lot_ids:
                         or_conditions.append({'sample_lots.sample_lot_id': {'$in': job_sample_lot_ids}})
-                    
+                
+                # Search in clients for client_name
+                clients_collection = db.clients
+                matching_clients = clients_collection.find({
+                    '$or': [
+                        {'client_name': {'$regex': q, '$options': 'i'}},
+                        {'company_name': {'$regex': q, '$options': 'i'}}
+                    ]
+                }, {'_id': 1})
+                matching_client_ids = [client['_id'] for client in matching_clients]
+                if matching_client_ids:
+                    # Find jobs for these clients
+                    jobs_for_clients = jobs_collection.find({
+                        'client_id': {'$in': matching_client_ids}
+                    }, {'_id': 1})
+                    client_job_ids = [job['_id'] for job in jobs_for_clients]
+                    if client_job_ids:
+                        # Find sample lots for these jobs
+                        sample_lots_for_client_jobs = sample_lots_collection.find({
+                            'job_id': {'$in': client_job_ids}
+                        }, {'_id': 1})
+                        client_sample_lot_ids = [lot['_id'] for lot in sample_lots_for_client_jobs]
+                        if client_sample_lot_ids:
+                            or_conditions.append({'sample_lots.sample_lot_id': {'$in': client_sample_lot_ids}})
+                
+                # Also add direct client search in sample_lots if they have client_id field
+                # This is a fallback in case the relationship chain is different
+                try:
+                    # Check if sample_lots have direct client_id reference
+                    sample_lots_with_clients = sample_lots_collection.find({
+                        'client_id': {'$in': matching_client_ids}
+                    }, {'_id': 1})
+                    direct_client_sample_lot_ids = [lot['_id'] for lot in sample_lots_with_clients]
+                    if direct_client_sample_lot_ids:
+                        or_conditions.append({'sample_lots.sample_lot_id': {'$in': direct_client_sample_lot_ids}})
+                except Exception:
+                    pass
+                
             except Exception:
                 pass
             
@@ -705,8 +735,6 @@ def sample_preparation_search(request):
             else:
                 query['$or'] = or_conditions
         
-        # Use raw query to search
-        db = connection.get_db()
         sample_preparations_collection = db.sample_preparations
         
         sample_preparations = sample_preparations_collection.find(query)

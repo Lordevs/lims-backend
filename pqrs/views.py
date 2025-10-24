@@ -653,7 +653,8 @@ def pqr_search(request):
                 {'type': {'$regex': q, '$options': 'i'}},
                 {'lab_test_no': {'$regex': q, '$options': 'i'}},
                 {'law_name': {'$regex': q, '$options': 'i'}},
-                {'mechanical_testing_conducted_by': {'$regex': q, '$options': 'i'}}
+                {'mechanical_testing_conducted_by': {'$regex': q, '$options': 'i'}},
+                {'basic_info.pqr_number': {'$regex': q, '$options': 'i'}}
             ]
             
             # Add welder name to global search
@@ -685,14 +686,65 @@ def pqr_search(request):
         
         data = []
         for pqr_doc in pqrs:
+            # Get welder information
+            welder_info = {
+                'welder_id': '',
+                'operator_name': 'Unknown Welder',
+                'operator_id': '',
+                'iqama': '',
+                'profile_image': None,
+                'profile_image_url': None
+            }
+            
+            try:
+                # Get welder information directly
+                welder_obj_id = pqr_doc.get('welder_id')
+                if welder_obj_id:
+                    if isinstance(welder_obj_id, str):
+                        welder_obj_id = ObjectId(welder_obj_id)
+                    welders_collection = db.welders
+                    welder_doc = welders_collection.find_one({'_id': welder_obj_id})
+                    if welder_doc:
+                        welder_info = {
+                            'welder_id': str(welder_doc.get('_id', '')),
+                            'operator_name': welder_doc.get('operator_name', 'Unknown Welder'),
+                            'operator_id': welder_doc.get('operator_id', ''),
+                            'iqama': welder_doc.get('iqama', ''),
+                            'profile_image': welder_doc.get('profile_image', ''),
+                            'profile_image_url': f"/media/{welder_doc.get('profile_image', '')}" if welder_doc.get('profile_image', '') else None
+                        }
+            except Exception:
+                pass
+            
             data.append({
                 'id': str(pqr_doc.get('_id', '')),
                 'type': pqr_doc.get('type', ''),
+                'basic_info': pqr_doc.get('basic_info', {}),
+                'joints': pqr_doc.get('joints', {}),
+                'joint_design_sketch': [f"/media/{file}" for file in pqr_doc.get('joint_design_sketch', [])],
+                'base_metals': pqr_doc.get('base_metals', {}),
+                'filler_metals': pqr_doc.get('filler_metals', {}),
+                'positions': pqr_doc.get('positions', {}),
+                'preheat': pqr_doc.get('preheat', {}),
+                'post_weld_heat_treatment': pqr_doc.get('post_weld_heat_treatment', {}),
+                'gas': pqr_doc.get('gas', {}),
+                'electrical_characteristics': pqr_doc.get('electrical_characteristics', {}),
+                'techniques': pqr_doc.get('techniques', {}),
+                'welding_parameters': pqr_doc.get('welding_parameters', {}),
+                'tensile_test': pqr_doc.get('tensile_test', {}),
+                'guided_bend_test': pqr_doc.get('guided_bend_test', {}),
+                'toughness_test': pqr_doc.get('toughness_test', {}),
+                'fillet_weld_test': pqr_doc.get('fillet_weld_test', {}),
+                'other_tests': pqr_doc.get('other_tests', {}),
+                'welder_id': str(pqr_doc.get('welder_id', '')),
+                'welder_info': welder_info,
+                'mechanical_testing_conducted_by': pqr_doc.get('mechanical_testing_conducted_by', ''),
                 'lab_test_no': pqr_doc.get('lab_test_no', ''),
                 'law_name': pqr_doc.get('law_name', ''),
-                'mechanical_testing_conducted_by': pqr_doc.get('mechanical_testing_conducted_by', ''),
+                'signatures': pqr_doc.get('signatures', {}),
                 'is_active': pqr_doc.get('is_active', True),
-                'created_at': pqr_doc.get('created_at').isoformat() if pqr_doc.get('created_at') else ''
+                'created_at': pqr_doc.get('created_at').isoformat() if pqr_doc.get('created_at') else '',
+                'updated_at': pqr_doc.get('updated_at').isoformat() if pqr_doc.get('updated_at') else ''
             })
         
         return JsonResponse({
