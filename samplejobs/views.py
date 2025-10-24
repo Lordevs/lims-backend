@@ -1133,7 +1133,7 @@ def job_with_certificates(request):
     - received_by: Search by received_by field (partial or complete, case-insensitive)
     - request_no: Search by request number (partial or complete, case-insensitive)
     - certificate_no: Search by certificate number (partial or complete, case-insensitive)
-    - q: Global search across all text fields (partial or complete, case-insensitive)
+    - q: Global search across all text fields including request_no and certificate_id (partial or complete, case-insensitive)
     - page: Page number for pagination
     - limit: Items per page
     
@@ -1300,6 +1300,59 @@ def job_with_certificates(request):
             client_ids = [doc['_id'] for doc in client_docs]
             if client_ids:
                 or_conditions.append({'client_id': {'$in': client_ids}})
+            
+            # Add request_no to global search
+            try:
+                sample_preps = sample_preparations_collection.find({
+                    'request_no': {'$regex': escaped_search, '$options': 'i'}
+                })
+                
+                sample_lot_ids = []
+                for prep in sample_preps:
+                    for sample_lot in prep.get('sample_lots', []):
+                        sample_lot_id = sample_lot.get('sample_lot_id')
+                        if sample_lot_id:
+                            sample_lot_ids.append(sample_lot_id)
+                
+                if sample_lot_ids:
+                    sample_lots = sample_lots_collection.find({
+                        '_id': {'$in': sample_lot_ids}
+                    })
+                    job_ids_by_request = [lot.get('job_id') for lot in sample_lots]
+                    if job_ids_by_request:
+                        or_conditions.append({'_id': {'$in': job_ids_by_request}})
+            except Exception:
+                pass
+            
+            # Add certificate_id to global search
+            try:
+                certificates = certificates_collection.find({
+                    'certificate_id': {'$regex': escaped_search, '$options': 'i'}
+                })
+                
+                prep_ids = [cert.get('request_id') for cert in certificates]
+                
+                if prep_ids:
+                    sample_preps = sample_preparations_collection.find({
+                        '_id': {'$in': prep_ids}
+                    })
+                    
+                    sample_lot_ids = []
+                    for prep in sample_preps:
+                        for sample_lot in prep.get('sample_lots', []):
+                            sample_lot_id = sample_lot.get('sample_lot_id')
+                            if sample_lot_id:
+                                sample_lot_ids.append(sample_lot_id)
+                    
+                    if sample_lot_ids:
+                        sample_lots = sample_lots_collection.find({
+                            '_id': {'$in': sample_lot_ids}
+                        })
+                        job_ids_by_cert = [lot.get('job_id') for lot in sample_lots]
+                        if job_ids_by_cert:
+                            or_conditions.append({'_id': {'$in': job_ids_by_cert}})
+            except Exception:
+                pass
             
             if '_id' in query or 'client_id' in query:
                 # If already filtered, add $or as additional filter

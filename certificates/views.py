@@ -699,17 +699,58 @@ def certificate_search(request):
                 if matching_sample_prep_ids:
                     or_conditions.append({'request_id': {'$in': matching_sample_prep_ids}})
                 
-                # Search in jobs for job_id, project_name
+                # Search in jobs for job_id, project_name, end_user, received_by
                 jobs_collection = db.jobs
                 matching_jobs = jobs_collection.find({
                     '$or': [
                         {'job_id': {'$regex': q, '$options': 'i'}},
-                        {'project_name': {'$regex': q, '$options': 'i'}}
+                        {'project_name': {'$regex': q, '$options': 'i'}},
+                        {'end_user': {'$regex': q, '$options': 'i'}},
+                        {'received_by': {'$regex': q, '$options': 'i'}}
                     ]
                 }, {'_id': 1})
                 matching_job_ids = [job['_id'] for job in matching_jobs]
                 if matching_job_ids:
-                    or_conditions.append({'request_id': {'$in': matching_job_ids}})
+                    # Find sample preparations linked to these jobs
+                    sample_lots_collection = db.sample_lots
+                    sample_lots = sample_lots_collection.find({'job_id': {'$in': matching_job_ids}})
+                    sample_lot_ids = [lot.get('_id') for lot in sample_lots]
+                    
+                    if sample_lot_ids:
+                        # Find sample preparations that contain these sample lots
+                        sample_preps_for_jobs = sample_prep_collection.find({
+                            'sample_lots.sample_lot_id': {'$in': sample_lot_ids}
+                        }, {'_id': 1})
+                        sample_prep_ids_for_jobs = [prep['_id'] for prep in sample_preps_for_jobs]
+                        if sample_prep_ids_for_jobs:
+                            or_conditions.append({'request_id': {'$in': sample_prep_ids_for_jobs}})
+                
+                # Search in clients for client_name, company_name
+                clients_collection = db.clients
+                matching_clients = clients_collection.find({
+                    '$or': [
+                        {'client_name': {'$regex': q, '$options': 'i'}},
+                        {'company_name': {'$regex': q, '$options': 'i'}}
+                    ]
+                }, {'_id': 1})
+                matching_client_ids = [client['_id'] for client in matching_clients]
+                if matching_client_ids:
+                    # Find jobs for these clients
+                    jobs_for_clients = jobs_collection.find({'client_id': {'$in': matching_client_ids}}, {'_id': 1})
+                    job_ids_for_clients = [job['_id'] for job in jobs_for_clients]
+                    if job_ids_for_clients:
+                        # Find sample lots for these jobs
+                        sample_lots_for_clients = sample_lots_collection.find({'job_id': {'$in': job_ids_for_clients}})
+                        sample_lot_ids_for_clients = [lot.get('_id') for lot in sample_lots_for_clients]
+                        
+                        if sample_lot_ids_for_clients:
+                            # Find sample preparations that contain these sample lots
+                            sample_preps_for_clients = sample_prep_collection.find({
+                                'sample_lots.sample_lot_id': {'$in': sample_lot_ids_for_clients}
+                            }, {'_id': 1})
+                            sample_prep_ids_for_clients = [prep['_id'] for prep in sample_preps_for_clients]
+                            if sample_prep_ids_for_clients:
+                                or_conditions.append({'request_id': {'$in': sample_prep_ids_for_clients}})
                 
             except Exception:
                 pass
