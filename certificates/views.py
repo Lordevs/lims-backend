@@ -682,6 +682,10 @@ def certificate_search(request):
             # Create OR conditions for global search across multiple fields
             or_conditions = [
                 {'certificate_id': {'$regex': q, '$options': 'i'}},
+                {'customers_name_no': {'$regex': q, '$options': 'i'}},
+                {'customer_po': {'$regex': q, '$options': 'i'}},
+                {'tested_by': {'$regex': q, '$options': 'i'}},
+                {'reviewed_by': {'$regex': q, '$options': 'i'}}
             ]
             
             # Add cross-collection search for related data
@@ -695,23 +699,6 @@ def certificate_search(request):
                 if matching_sample_prep_ids:
                     or_conditions.append({'request_id': {'$in': matching_sample_prep_ids}})
                 
-                # Search in sample lots for item_no, sample_type, material_type
-                sample_lots_collection = db.sample_lots
-                matching_sample_lots = sample_lots_collection.find({
-                    '$or': [
-                        {'item_no': {'$regex': q, '$options': 'i'}},
-                    ]
-                }, {'_id': 1})
-                matching_sample_lot_ids = [lot['_id'] for lot in matching_sample_lots]
-                if matching_sample_lot_ids:
-                    # Find sample preparations that use these sample lots
-                    sample_preps_for_lots = sample_prep_collection.find({
-                        'sample_lots.sample_lot_id': {'$in': matching_sample_lot_ids}
-                    }, {'_id': 1})
-                    lot_sample_prep_ids = [prep['_id'] for prep in sample_preps_for_lots]
-                    if lot_sample_prep_ids:
-                        or_conditions.append({'request_id': {'$in': lot_sample_prep_ids}})
-                
                 # Search in jobs for job_id, project_name
                 jobs_collection = db.jobs
                 matching_jobs = jobs_collection.find({
@@ -722,19 +709,7 @@ def certificate_search(request):
                 }, {'_id': 1})
                 matching_job_ids = [job['_id'] for job in matching_jobs]
                 if matching_job_ids:
-                    # Find sample lots for these jobs
-                    sample_lots_for_jobs = sample_lots_collection.find({
-                        'job_id': {'$in': matching_job_ids}
-                    }, {'_id': 1})
-                    job_sample_lot_ids = [lot['_id'] for lot in sample_lots_for_jobs]
-                    if job_sample_lot_ids:
-                        # Find sample preparations that use these sample lots
-                        sample_preps_for_job_lots = sample_prep_collection.find({
-                            'sample_lots.sample_lot_id': {'$in': job_sample_lot_ids}
-                        }, {'_id': 1})
-                        job_sample_prep_ids = [prep['_id'] for prep in sample_preps_for_job_lots]
-                        if job_sample_prep_ids:
-                            or_conditions.append({'request_id': {'$in': job_sample_prep_ids}})
+                    or_conditions.append({'request_id': {'$in': matching_job_ids}})
                 
             except Exception:
                 pass
