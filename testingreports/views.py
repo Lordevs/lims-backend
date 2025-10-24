@@ -425,6 +425,7 @@ def testing_report_search(request):
     - prepared_by: Search by prepared by field (case-insensitive)
     - welder_name: Search by welder name in results (case-insensitive)
     - welder_id: Search by welder ID in results
+    - q: Global search across all text fields (client_name, prepared_by, welder_name, project_details, contract_details)
     """
     try:
         # Get query parameters
@@ -432,6 +433,7 @@ def testing_report_search(request):
         prepared_by = request.GET.get('prepared_by', '')
         welder_name = request.GET.get('welder_name', '')
         welder_id = request.GET.get('welder_id', '')
+        q = request.GET.get('q', '')  # Global search parameter
         
         # Build query for raw MongoDB
         query = {}
@@ -443,6 +445,25 @@ def testing_report_search(request):
             query['results.welder_name'] = {'$regex': welder_name, '$options': 'i'}
         if welder_id:
             query['results.welder_id'] = welder_id
+        
+        # Handle global search parameter 'q'
+        if q:
+            # Create OR conditions for global search across multiple fields
+            or_conditions = [
+                {'client_name': {'$regex': q, '$options': 'i'}},
+                {'results.welder_name': {'$regex': q, '$options': 'i'}},
+                {'results.welder_id': {'$regex': q, '$options': 'i'}},
+                {'results.iqama_number': {'$regex': q, '$options': 'i'}},
+            ]
+            
+            if query:
+                # If we have other specific filters, combine them with AND
+                query['$and'] = [
+                    {k: v for k, v in query.items() if k != '$and'},
+                    {'$or': or_conditions}
+                ]
+            else:
+                query['$or'] = or_conditions
         
         # Use raw query to search
         db = connection.get_db()
@@ -480,7 +501,8 @@ def testing_report_search(request):
                 'client_name': client_name,
                 'prepared_by': prepared_by,
                 'welder_name': welder_name,
-                'welder_id': welder_id
+                'welder_id': welder_id,
+                'q': q
             }
         })
         

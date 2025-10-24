@@ -294,9 +294,11 @@ def test_method_search(request):
                 'id': str(test_method_doc.get('_id', '')),
                 'test_name': test_method_doc.get('test_name', ''),
                 'test_description': test_method_doc.get('test_description', ''),
+                'test_columns': test_method_doc.get('test_columns', []),
                 'hasImage': test_method_doc.get('hasImage', False),
                 'comments': test_method_doc.get('comments', ''),
-                'createdAt': safe_datetime_format(test_method_doc.get('createdAt'))
+                'createdAt': safe_datetime_format(test_method_doc.get('createdAt')),
+                'updatedAt': safe_datetime_format(test_method_doc.get('updatedAt'))
             })
         
         return JsonResponse({
